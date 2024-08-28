@@ -87,7 +87,7 @@ private:
         auto i = root;
         while (root->next) {
             auto node = new Node{0, root->frequency + root->next->frequency, root, root->next, nullptr};
-            while (i->next && i->next->frequency < node->frequency)
+            while (i->next && i->next->frequency <= node->frequency)
                 i = i->next;
             node->next = i->next;
             i->next = node;
