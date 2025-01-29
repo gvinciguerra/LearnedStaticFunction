@@ -1,117 +1,56 @@
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
 #include <fstream>
-#include <iterator>
-#include <limits>
 #include <string>
-#include <valarray>
+#include <span>
 #include <vector>
 
 namespace learnedretrieval {
-
-/** Reads a learned retrieval dataset from a CSV file */
-class DatasetReader {
-    std::vector<std::string> classes;
-    std::fstream file;
-    std::string buffer;
-    std::string field;
+class BinaryDatasetReader {
+    using label_type = uint16_t;
+    std::vector<label_type> labels;
+    std::vector<float> examples;
+    size_t num_examples;
+    size_t num_features;
+    size_t num_classes;
 
 public:
+    BinaryDatasetReader() = default;
 
-    struct Row {
-        std::string example;                ///< The example string
-        uint32_t label;                     ///< The true label of the example
-        std::valarray<float> probabilities; ///< The predicted class probabilities
-    };
+    BinaryDatasetReader(const std::string &path) {
+        auto examples_path = path + "_X.lrbin";
+        auto labels_path = path + "_y.lrbin";
 
-    DatasetReader() = default;
-
-    /** Creates a new dataset reader from the given file. */
-    DatasetReader(const std::string &path) : classes(), file(path), buffer(), field() {
+        std::ifstream file(examples_path, std::ios::binary);
         if (!file.is_open())
-            throw std::runtime_error("Could not open file " + path);
+            throw std::runtime_error("Could not open examples file at " + examples_path);
 
-        // Parse classes from header columns
-        std::string line;
-        std::getline(file, line);
-        size_t pos = 0, prev_pos = 0;
-        while ((pos = line.find(',', pos + 1)) != std::string::npos) {
-            if (pos > 0 && line[pos - 1] != '\\')
-                classes.push_back(line.substr(prev_pos, pos - prev_pos));
-            prev_pos = pos + 1;
-        }
-        if (line[pos - 1] != '\\')
-            classes.push_back(line.substr(prev_pos));
+        file.read(reinterpret_cast<char *>(&num_examples), sizeof(size_t));
+        file.read(reinterpret_cast<char *>(&num_features), sizeof(size_t));
+        examples.resize(num_examples * num_features);
+        file.read(reinterpret_cast<char *>(&examples[0]), num_examples * num_features * sizeof(float));
+        file.close();
 
-        if (classes[0] != "example" || classes[1] != "label")
-            throw std::runtime_error("Invalid header columns");
-        classes.erase(classes.begin(), classes.begin() + 2);
+        file.open(labels_path, std::ios::binary);
+        if (!file.is_open())
+            throw std::runtime_error("Could not open labels file at " + labels_path);
+
+        labels.resize(num_examples);
+        label_type n_classes;
+        file.read(reinterpret_cast<char *>(&n_classes), sizeof(label_type));
+        file.read(reinterpret_cast<char *>(&labels[0]), num_examples * sizeof(label_type));
+        num_classes = n_classes;
     }
 
-    /** Reads the next row from the dataset. Returns false if there are no more rows. */
-    bool next_row(Row &row) {
-        if (file.peek() == std::ifstream::traits_type::eof())
-            return false;
+    size_t size() const { return num_examples; }
 
-        advance_example();
-        if (field.empty() && file.eof())
-            return false;
+    size_t features_count() const { return num_features; }
 
-        row.example = field;
+    size_t classes_count() const { return num_classes; }
 
-        advance_field();
-        row.label = std::stoi(field);
+    std::span<const float> get_example(size_t i) { return {&examples[i * num_features], num_features}; }
 
-        if (row.probabilities.size() != classes.size())
-            row.probabilities.resize(classes.size());
-
-        for (size_t i = 0; i < classes.size() - 1; i++) {
-            advance_field();
-            row.probabilities[i] = std::stof(field);
-        }
-        advance_line();
-        row.probabilities[classes.size() - 1] = std::stof(field);
-
-        if (std::fabs(row.probabilities.sum() - 1.) > 1e-4)
-            throw std::runtime_error("Probabilities do not sum to 1");
-
-        return true;
-    }
-
-    /** Returns the number of distinct classes in the dataset. */
-    size_t num_classes() { return classes.size(); }
-
-    /** Returns the name of the dataset class at the given index. */
-    std::string class_name(size_t i) { return classes[i]; }
-
-private:
-
-    void advance_example() {
-        if (file.peek() != '"') {
-            std::getline(file, field, ',');
-            return;
-        }
-
-        file.get(); // consume '"'
-        field.clear();
-        while (true) { // handle double "" escape
-            std::getline(file, buffer, '"');
-            field += buffer;
-            if (file.peek() == '"') {
-                field.push_back(char(file.get())); // add escaped "
-            } else {
-                if (file.get() != ',')
-                    throw std::runtime_error("Expected ',' after example");
-                break;
-            }
-        }
-    }
-
-    void advance_field() { std::getline(file, field, ','); }
-
-    void advance_line() { std::getline(file, field); }
+    label_type get_label(size_t i) { return labels[i]; }
 };
-
 }
