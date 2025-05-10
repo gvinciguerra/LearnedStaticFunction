@@ -16,7 +16,6 @@ class Shannon {
     std::vector<int> lengths;
     std::vector<int> length_counts;
     int max_length;
-    // int min_length;
 
 public:
     struct Code {
@@ -97,12 +96,14 @@ private:
 
     void compute_code_lengths() {
         max_length = 0;
-        // min_length = std::numeric_limits<int>::max();
         for (size_t i = 0; i < frequencies.size(); ++i) {
-            lengths[i] = frequencies[i] ? (int) std::ceil(-std::log2(frequencies[i])) : 63;
-            lengths[i] = std::clamp<int>(lengths[i], 1, 63);
+            int res;
+            std::frexp(frequencies[i], &res);
+            res = frequencies[i] == 0 ? 63 : std::clamp<int>(1 + -res, 1, 63);
+            lengths[i] = res;
+            // lengths[i] = frequencies[i] ? (int) std::ceil(-std::log2(frequencies[i])) : 63;
+            // lengths[i] = std::clamp<int>(lengths[i], 1, 63);
             max_length = std::max<int>(max_length, lengths[i]);
-            // min_length = std::min<int>(min_length, lengths[i]);
         }
         std::fill(length_counts.begin(), length_counts.begin() + max_length + 1, 0);
         for (size_t i = 0; i < lengths.size(); ++i)

@@ -54,43 +54,47 @@ private:
     void compute_code_lengths() {
         std::iota(symbols.begin(), symbols.end(), 0);
 
-        // Algorithm 2 from https://dl.acm.org/doi/pdf/10.1145/3342555 to compute code lengths
-        auto zipv = std::ranges::views::zip(symbols, frequencies);
-        // auto rshift = [](const auto &x, const unsigned offset) {
-        //     return (boost::sort::spreadsort::float_mem_cast<Frequency, int>(-std::get<1>(x)) >> offset);
-        // };
-        auto comp = [](const auto &x, const auto &y) { return std::get<1>(x) > std::get<1>(y); };
-        // boost::sort::spreadsort::float_sort(zipv.begin(), zipv.end(), rshift, comp);
-        boost::sort::pdqsort_branchless(zipv.begin(), zipv.end(), comp);
+        for (auto i = 0; i < frequencies.size(); ++i) {
+            if constexpr (std::is_floating_point_v<Frequency>) {
+                using length_type = typename decltype(lengths)::value_type;
+                lengths[i] = static_cast<length_type>((long double)(frequencies[i]) * std::numeric_limits<length_type>::max());
+            } else {
+                lengths[i] = frequencies[i];
+            }
+        }
 
+        // Algorithm 2 from https://dl.acm.org/doi/pdf/10.1145/3342555 to compute code lengths
+        auto zipv = std::ranges::views::zip(symbols, lengths);
+        auto comp = [](const auto &x, const auto &y) { return std::get<1>(x) > std::get<1>(y); };
+        boost::sort::pdqsort_branchless(zipv.begin(), zipv.end(), comp);
 
         // Phase 1
         auto n = (int) symbols.size();
         auto leaf = n - 1;
         auto root = n - 1;
         for (auto next = n - 1; next > 0; --next) {
-            if (leaf < 0 || (root > next && frequencies[root] < frequencies[leaf])) {
-                frequencies[next] = frequencies[root];
-                frequencies[root] = next;
+            if (leaf < 0 || (root > next && lengths[root] < lengths[leaf])) {
+                lengths[next] = lengths[root];
+                lengths[root] = next;
                 --root;
             } else {
-                frequencies[next] = frequencies[leaf];
+                lengths[next] = lengths[leaf];
                 --leaf;
             }
-            if (leaf < 0 || (root > next && frequencies[root] < frequencies[leaf])) {
-                frequencies[next] += frequencies[root];
-                frequencies[root] = next;
+            if (leaf < 0 || (root > next && lengths[root] < lengths[leaf])) {
+                lengths[next] += lengths[root];
+                lengths[root] = next;
                 --root;
             } else {
-                frequencies[next] += frequencies[leaf];
+                lengths[next] += lengths[leaf];
                 --leaf;
             }
         }
 
         // Phase 2
-        frequencies[1] = 0;
+        lengths[1] = 0;
         for (auto next = 2; next < n; ++next)
-            frequencies[next] = frequencies[frequencies[next]] + 1;
+            lengths[next] = lengths[lengths[next]] + 1;
 
         // Phase 3
         auto avail = 1;
@@ -99,12 +103,12 @@ private:
         auto next = 0;
         root = 1;
         while (avail > 0) {
-            while (root < n && frequencies[root] == depth) {
+            while (root < n && lengths[root] == depth) {
                 ++used;
                 ++root;
             }
             while (avail > used) {
-                frequencies[next] = depth;
+                lengths[next] = std::min(depth, 63);
                 ++next;
                 --avail;
             }
@@ -112,7 +116,6 @@ private:
             ++depth;
             used = 0;
         }
-        std::copy(frequencies.begin(), frequencies.end(), lengths.begin());
     }
 
     Code encode_internal(Symbol symbol) {
@@ -147,6 +150,29 @@ private:
         }
 
         throw std::runtime_error("Invalid code");
+        // throw std::runtime_error("Invalid code");
+        // auto max_length = lengths.back();
+        // uint64_t buffer = bits::bit_reverse(bits::read_int(data, bit_offset, max_length), max_length);
+        // uint64_t code = 0;
+        // int length = 0;
+        // int cumulative_count = 0;
+        // int i = 0;
+        // while (buffer >= code) {
+        //     auto j = i;
+        //     while (lengths[i] == length)
+        //         ++i;
+        //     auto length_counts = i - j;
+        //     auto next_code = code + length_counts * (uint64_t(1) << (max_length - length));
+        //     if (buffer < next_code)
+        //         break;
+        //     code = next_code;
+        //     cumulative_count += length_counts;
+        //     ++length;
+        // }
+        //
+        // auto symbol_id = (int) ((buffer - code) >> (max_length - length)); // among those with the same length
+        // bit_offset += length;
+        // return symbols[cumulative_count + symbol_id];
     }
 };
 }

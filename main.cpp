@@ -55,16 +55,20 @@ void learned_value_encoding(learnedretrieval::BinaryDatasetReader &dataset, lear
     std::vector<float> tmp(dataset.classes_count());
     Coder coder(tmp);
 
+    double entropy = 0;
     for (int i = 0; i < dataset.size(); ++i) {
         auto example = dataset.get_example(i);
         auto label = dataset.get_label(i);
         auto output = model.invoke(example);
+        entropy -= output[label] ? std::log2(output[label]) : 0;
         coder.reset(output);
         auto [code, length] = coder.encode(label);
         huffman_bits += length;
     }
+    entropy /= dataset.size();
     auto model_bits = model.model_bytes() * 8;
     std::cout << "  Model bits/value:      " << double(model_bits) / dataset.size() << std::endl
+              << "  Entropy:               " << entropy << std::endl
               << "  Retrieval bits/value:  " << double(huffman_bits) / dataset.size() << std::endl
               << "  Overall bits/value:    " << double(huffman_bits + model_bits) / dataset.size() << std::endl;
 
@@ -141,8 +145,7 @@ int main(int argc, char *argv[]) {
         double entropy = 0;
         for (int i = 0; i < dataset.classes_count(); ++i) {
             auto f = frequencies[i] / dataset.size();
-            if (f > 0)
-                entropy -= f * std::log2(f);
+            entropy -= f * std::log2(f);
         }
 
         std::cout << "Entropy: " << entropy << std::endl;

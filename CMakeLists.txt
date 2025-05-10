@@ -3,8 +3,7 @@ project(LearnedRetrieval)
 
 set(CMAKE_CXX_STANDARD 23)
 
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
-
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -ffast-math")
 include_directories(include lib/sort/include)
 
 #option(TFLITE_ENABLE_METAL "Enable Metal delegate (iOS only)" ON)
