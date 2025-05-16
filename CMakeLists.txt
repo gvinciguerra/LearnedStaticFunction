@@ -1,14 +1,64 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.22...4.0)
 project(LearnedRetrieval)
 
-set(CMAKE_CXX_STANDARD 23)
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+endif ()
 
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -ffast-math")
-include_directories(include lib/sort/include)
+if((CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        AND PROJECT_IS_TOP_LEVEL)
+    add_compile_options(-march=native -ffast-math)
+endif()
+
+####################### Dependency setup #######################
 
 #option(TFLITE_ENABLE_METAL "Enable Metal delegate (iOS only)" ON)
 #option(TFLITE_ENABLE_XNNPACK "Enable XNNPACK backend" OFF)
 add_subdirectory(lib/tensorflow/tensorflow/lite "${CMAKE_CURRENT_BINARY_DIR}/tensorflow-lite" EXCLUDE_FROM_ALL)
 
-add_executable(LearnedRetrieval main.cpp)
-target_link_libraries(LearnedRetrieval tensorflow-lite)
+if(NOT TARGET tlx)
+    set(TLX_INSTALL_INCLUDE_DIR tlx CACHE PATH "Workaround for TLX breaking the first cmake call")
+    add_subdirectory(lib/burr-vl/tlx SYSTEM EXCLUDE_FROM_ALL)
+endif()
+
+if(NOT TARGET ips2ra)
+    set(IPS2RA_DISABLE_PARALLEL ON CACHE PATH "FindTBB greps a file that does not exist in recent TBB versions")
+    add_subdirectory(lib/burr-vl/ips2ra SYSTEM EXCLUDE_FROM_ALL)
+endif()
+
+add_library(RibbonSorter SHARED lib/burr-vl/sorter.cpp)
+target_compile_features(RibbonSorter PUBLIC cxx_std_17)
+target_link_libraries(RibbonSorter PUBLIC tlx ips2ra)
+
+add_library(RibbonVLR INTERFACE)
+target_compile_features(RibbonVLR INTERFACE cxx_std_20)
+target_include_directories(RibbonVLR INTERFACE lib/burr-vl)
+target_include_directories(RibbonVLR INTERFACE lib/burr-vl/ips2ra/include)
+target_include_directories(RibbonVLR INTERFACE lib/burr-vl/DySECT)
+target_include_directories(RibbonVLR INTERFACE lib/sort/include)
+target_link_libraries(RibbonVLR INTERFACE RibbonSorter)
+
+####################### Library Setup #######################
+
+add_library(LearnedRetrieval INTERFACE)
+target_include_directories(LearnedRetrieval INTERFACE include)
+target_compile_features(LearnedRetrieval INTERFACE cxx_std_23)
+target_link_libraries(LearnedRetrieval INTERFACE RibbonVLR tensorflow-lite)
+
+####################### Benchmark Targets #######################
+if(PROJECT_IS_TOP_LEVEL)
+    add_executable(Main main.cpp)
+    target_link_libraries(Main PUBLIC LearnedRetrieval)
+
+    add_executable(ribbon_learned ribbon_learned.cpp)
+    target_link_libraries(ribbon_learned PUBLIC LearnedRetrieval tlx)
+
+    add_executable(ribbon_learned_novlr ribbon_learned_novlr.cpp)
+    target_link_libraries(ribbon_learned_novlr PUBLIC LearnedRetrieval tlx)
+
+    add_executable(ribbon_huffman ribbon_huffman.cpp)
+    target_link_libraries(ribbon_huffman PUBLIC LearnedRetrieval tlx)
+
+    add_executable(ribbon_huffman_novlr ribbon_huffman_novlr.cpp)
+    target_link_libraries(ribbon_huffman_novlr PUBLIC LearnedRetrieval tlx)
+endif()
