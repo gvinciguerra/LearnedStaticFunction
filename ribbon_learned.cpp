@@ -40,9 +40,9 @@ int main(int argc, char *argv[]) {
     {
         learnedretrieval::ModelWrapper model(model_path);
         rocksdb::StopWatchNano timer(true);
-        std::vector<uint32_t> symbols(dataset.classes_count());
         size_t huffman_bits = 0;
 
+        learnedretrieval::Huffman<uint64_t, float> coder(dataset.classes_count());
         auto input = std::make_unique<std::pair<Key, ResultRowVLR>[]>(dataset.size());
         //auto input = std::make_unique<std::pair<std::span<const float>, ResultRowVLR>[]>(dataset.size());
         size_t maxlen = 0;
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
             if (maxIdx == label && output[label] > 0.5) {
                 ++numCorrectIsMoreThan50;
             }
-            auto [code, length] = learnedretrieval::Huffman<uint64_t, float>(output).encode(label);
+            auto [code, length] = coder.encode_once(output, label);
             XXH3_64bits_reset_withSeed(state, 100);
             XXH3_64bits_update(state, &i, sizeof(size_t));
             XXH3_64bits_update(state, example.data(), example.size_bytes());
@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
             uint64_t val = r.QueryRetrieval(hash);
             //ResultRowVLR val = r.QueryRetrieval(example);
             size_t bit_offset = 0;
-            uint64_t res = learnedretrieval::Huffman<uint64_t, float>(output).decode(&val, bit_offset);
+            uint64_t res = coder.decode_once(output, &val, bit_offset);
             bool found = res == label;
             assert(found);
             ok &= found;
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
             auto example = dataset.get_example(i % dataset.size());
             auto label = dataset.get_label(i % dataset.size());
             auto output = model.invoke(example);
-            auto [code, length] = learnedretrieval::Huffman<>::encode_once(symbols, output, label);
+            auto [code, length] = coder.encode_once(output, label);
             total += length;
         }
         auto end2 = std::chrono::high_resolution_clock::now();

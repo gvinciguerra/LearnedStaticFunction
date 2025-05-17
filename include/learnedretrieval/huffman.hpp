@@ -33,6 +33,8 @@ public:
         compute_code_lengths();
     }
 
+    explicit Huffman(size_t size) : table(size) { }
+
     void reset(const std::span<Frequency> &f) {
         assert(f.size() == frequencies.size());
         frequencies = f;
@@ -50,6 +52,27 @@ public:
     }
 
     Symbol decode(const uint64_t *data, size_t &bit_offset) {
+        return decode_internal(data, bit_offset);
+    }
+
+    Code encode_once(const std::span<Frequency> &f, Symbol symbol) {
+        if constexpr (std::is_floating_point_v<Frequency>) {
+            if (f[symbol] > 0.5)
+                return {0, 1};
+        }
+        reset(f);
+        return encode_internal(symbol);
+    }
+
+    Symbol decode_once(const std::span<Frequency> &f, const uint64_t *data, size_t &bit_offset) {
+        if constexpr (std::is_floating_point_v<Frequency>) {
+            auto max_frequency = std::max_element(f.begin(), f.end());
+            if (*max_frequency > 0.5 && ((data[bit_offset / 64] >> (bit_offset % 64)) & 1) == 0) {
+                ++bit_offset;
+                return max_frequency - f.begin();
+            }
+        }
+        reset(f);
         return decode_internal(data, bit_offset);
     }
 

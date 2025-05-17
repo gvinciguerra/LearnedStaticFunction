@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     {
         learnedretrieval::ModelWrapper model(model_path);
         rocksdb::StopWatchNano timer(true);
-        std::vector<uint32_t> symbols(dataset.classes_count());
+        learnedretrieval::Huffman<uint64_t, float> coder(dataset.classes_count());
 
         size_t huffman_bits = 0;
         size_t maxlen = 0;
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
             auto example = dataset.get_example(i);
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
-            auto [code, length] = learnedretrieval::Huffman<uint64_t, float>::encode_once(symbols, output, label);
+            auto [code, length] = coder.encode_once(output, label);
             if (length > maxlen)
                 maxlen = length;
             huffman_bits += length;
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
             auto example = dataset.get_example(i);
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
-            auto [code, length] = learnedretrieval::Huffman<uint64_t, float>(output).encode(label);
+            auto [code, length] = coder.encode_once(output, label);
 
             for (unsigned char j = 0; j < length; ++j) {
                 XXH3_64bits_reset_withSeed(state, 100);
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
                 code |= (val & 1);
             }
             size_t bit_offset = 0;
-            uint64_t res = learnedretrieval::Huffman<uint64_t, float>(output).decode(&code, bit_offset);
+            uint64_t res = coder.decode_once(output, &code, bit_offset);
             bool found = res == label;
             assert(found);
             ok &= found;
