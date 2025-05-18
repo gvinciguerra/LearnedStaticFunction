@@ -17,6 +17,8 @@
 #include "learnedretrieval/dataset_reader.hpp"
 #include "learnedretrieval/model_wrapper.hpp"
 
+using ModelOutputType = float; // uint8
+
 namespace ribbon {
     struct Config : public ribbon::RConfig<64, 1, ThreshMode::onebit, false, true, false, 0, uint64_t> {
         static constexpr bool kUseVLR = false;
@@ -42,9 +44,9 @@ int main(int argc, char *argv[]) {
     using namespace ribbon;
     IMPORT_RIBBON_CONFIG(Config);
     {
-        learnedretrieval::ModelWrapper model(model_path);
+        learnedretrieval::ModelWrapper<ModelOutputType> model(model_path);
         rocksdb::StopWatchNano timer(true);
-        learnedretrieval::Huffman<uint64_t, float> coder(dataset.classes_count());
+        learnedretrieval::Huffman<uint64_t, ModelOutputType> coder(dataset.classes_count());
 
         size_t huffman_bits = 0;
         size_t maxlen = 0;
