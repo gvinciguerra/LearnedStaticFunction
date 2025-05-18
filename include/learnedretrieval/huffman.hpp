@@ -13,30 +13,33 @@
 namespace learnedretrieval {
 template<typename Symbol = uint32_t, typename Frequency = float>
 class Huffman {
+    using LengthType = uint8_t;
     struct SymbolLength {
         Symbol symbol;
-        int length;
+        LengthType length;
     };
     std::vector<SymbolLength> table;
+    std::vector<SymbolLength> temp_table;
+    std::array<uint32_t, 256> sort_counts;
     std::span<Frequency> frequencies;
 
 public:
     struct Code {
         uint64_t code; ///< The value of the code.
-        int length; ///< The length of the code in bits.
+        LengthType length; ///< The length of the code in bits.
     };
 
     Huffman() = default;
 
     template<typename Frequencies>
-    explicit Huffman(Frequencies &f) : table(f.size()), frequencies(f) {
+    explicit Huffman(Frequencies &f) : table(f.size()), temp_table(f.size()), frequencies(f) {
         compute_code_lengths();
     }
 
-    explicit Huffman(size_t size) : table(size) { }
+    explicit Huffman(size_t size) : table(size), temp_table(size) { }
 
     void reset(const std::span<Frequency> &f) {
-        assert(f.size() == frequencies.size());
+        assert(f.size() == table.size());
         frequencies = f;
         compute_code_lengths();
     }
@@ -79,11 +82,10 @@ public:
 private:
 
     void compute_code_lengths() {
-
         for (Symbol i = 0; i < frequencies.size(); ++i) {
             if constexpr (std::is_floating_point_v<Frequency>) {
-                using length_type = decltype(table[0].length);
-                table[i] = {i, static_cast<length_type>((long double)(frequencies[i]) * std::numeric_limits<length_type>::max())};
+                constexpr double scaling_factor = std::numeric_limits<LengthType>::max();
+                table[i] = {i, static_cast<LengthType>(frequencies[i] * scaling_factor)};
             } else {
                 table[i] = {i, frequencies[i]};
             }
@@ -91,9 +93,23 @@ private:
 
         // Algorithm 2 from https://dl.acm.org/doi/pdf/10.1145/3342555 to compute code lengths
         auto comp = [](const auto &x, const auto &y) { return x.length > y.length; };
-        boost::sort::pdqsort_branchless(table.begin(), table.end(), comp);
-        // std::sort(table.begin(), table.end(), comp);
-        // ips2ra::sort(table.rbegin(), table.rend(), [&] (const auto &x) { return (uint32_t) x.length; });
+        if constexpr (std::is_same_v<LengthType, uint8_t>) {
+            if (table.size() < 32) {
+                boost::sort::pdqsort_branchless(table.begin(), table.end(), comp);
+            } else {
+                std::fill(sort_counts.begin(), sort_counts.end(), 0);
+                for (auto it = table.begin(); it != table.end(); ++it)
+                    ++sort_counts[it->length];
+                std::partial_sum(sort_counts.begin(), sort_counts.end(), sort_counts.begin());
+                for (auto it = table.end() - 1; it >= table.begin(); --it)
+                    temp_table[temp_table.size() - 1 - --sort_counts[it->length]] = *it;
+                table.swap(temp_table);
+            }
+        } else {
+            boost::sort::pdqsort_branchless(table.begin(), table.end(), comp);
+            // std::sort(table.begin(), table.end(), comp);
+            // ips2ra::sort(table.rbegin(), table.rend(), [&] (const auto &x) { return x.length; });
+        }
 
         // Phase 1
         auto n = (int) table.size();
