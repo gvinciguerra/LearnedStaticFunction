@@ -61,4 +61,7 @@ if(PROJECT_IS_TOP_LEVEL)
 
     add_executable(ribbon_huffman_novlr ribbon_huffman_novlr.cpp)
     target_link_libraries(ribbon_huffman_novlr PUBLIC LearnedRetrieval tlx)
+
+    add_executable(ribbon_learned_filter ribbon_learned_filtered.cpp)
+    target_link_libraries(ribbon_learned_filter PUBLIC LearnedRetrieval tlx)
 endif()
