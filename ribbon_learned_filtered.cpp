@@ -18,7 +18,7 @@
 #include "learnedretrieval/model_wrapper.hpp"
 
 using ModelOutputType = float; // uint8
-#define LIMIT 300000
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         std::cerr << "Usage: " << argv[0] << " <dataset_path> <model_path>" << std::endl;
@@ -46,19 +46,19 @@ int main(int argc, char *argv[]) {
         size_t huffman_bits = 0;
         size_t filter_bits = 0;
 
-        learnedretrieval::FilterCoding<learnedretrieval::FilterHuffmanCoder<>> coder(dataset.classes_count());
+        using coder =  learnedretrieval::FilterCoding<learnedretrieval::FilterHuffmanCoder<>>;
         auto state = XXH3_createState();
         assert(state);
-
         size_t maxlenfilter = 0;
         auto inputFilter = std::make_unique<std::pair<Key, ResultRowVLR>[]>(dataset.size());
-        for (size_t i = 0; i < dataset.size() && i<LIMIT; ++i) {
+        for (size_t i = 0; i < dataset.size(); ++i) {
+
             auto example = dataset.get_example(i);
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
             auto probabilities = model.get_probabilities();
-            auto [code, filterLength] = coder.encode_once_filter(output, label);
-            XXH3_64bits_reset_withSeed(state, 100);
+            auto [code, filterLength] = coder::encode_once_filter(output, label);
+            XXH3_64bits_reset_withSeed(state, 500);
             XXH3_64bits_update(state, &i, sizeof(size_t));
             XXH3_64bits_update(state, example.data(), example.size_bytes());
             auto hash = XXH3_64bits_digest(state);
@@ -71,14 +71,14 @@ int main(int argc, char *argv[]) {
 
 
         ribbon_filter<4, Config> filter(0.90625, 42, maxlenfilter);
-        filter.AddRange(inputFilter.get(), inputFilter.get() + LIMIT, false);
+        filter.AddRange(inputFilter.get(), inputFilter.get() + dataset.size(), true);
         filter.BackSubst();
 
         size_t maxlen = 0;
         auto input = std::make_unique<std::pair<Key, ResultRowVLR>[]>(dataset.size());
         double entropy = 0;
         size_t numCorrectIsMoreThan50 = 0;
-        for (size_t i = 0; i < dataset.size()&&i<LIMIT; ++i) {
+        for (size_t i = 0; i < dataset.size(); ++i) {
             auto example = dataset.get_example(i);
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
             uint64_t filterVal = filter.QueryRetrieval(hash);
 
             size_t bit_offset = 0;
-            auto [code, length] = coder.encode_once_corrected_code(output, label, filterVal);
+            auto [code, length] = coder::encode_once_corrected_code(output, label, filterVal);
             input[i].first = hash;
             if (length > maxlen)
                 maxlen = length;
@@ -107,9 +107,9 @@ int main(int argc, char *argv[]) {
         std::cout << "Entropy: " << (entropy / dataset.size()) << "\n";
         std::cout << "Correct guess has >50% prob: " << (numCorrectIsMoreThan50 / static_cast<double>(dataset.size())) << "\n";
         auto nanos = timer.ElapsedNanos(true);
-        std::cout << "Preprocessing time: " << nanos << " ns (" << (nanos / static_cast<double>(dataset.size())) << " ns/item)\n";
-        ribbon_filter<4, Config> r(0.90625, 42, maxlen);
-        r.AddRange(input.get(), input.get() + LIMIT);
+        std::cout << "Preprocessing time (including filter): " << nanos << " ns (" << (nanos / static_cast<double>(dataset.size())) << " ns/item)\n";
+        ribbon_filter<4, Config> r(0.90625, 144, maxlen);
+        r.AddRange(input.get(), input.get() + dataset.size());
         r.BackSubst();
         auto nanos2 = timer.ElapsedNanos(true);
         std::cout << "Ribbon construction time: " << nanos2 << " ns (" << (nanos2 / static_cast<double>(dataset.size())) << " ns/item)\n";
@@ -118,19 +118,26 @@ int main(int argc, char *argv[]) {
         input.reset();
         auto model_bits = model.model_bytes() * 8;
 
-        std::cout << "Max length: " << maxlen << "\n";
-        const size_t bytes = filter.Size();
+        std::cout << "Max length correction: " << maxlen << "\n";
+        std::cout << "Max length filter: " << maxlenfilter << "\n";
+        const size_t bytesFilter = filter.Size();
+        const size_t bytes = r.Size();
+        const size_t bytesTotal = bytes + bytesFilter;
         std::cout << "Ribbon size: " << (bytes * 8) << " bits\n";
+        std::cout << "Filter size: " << (bytesFilter * 8) << " bits\n";
+        std::cout << "Ribbon+Filter size: " << (bytesTotal * 8) << " bits\n";
         std::cout << "Ribbon bits/example: " << ((bytes * 8) / static_cast<double>(dataset.size())) << "\n";
+        std::cout << "Filter bits/example: " << ((bytesFilter * 8) / static_cast<double>(dataset.size())) << "\n";
+        std::cout << "Ribbon+Filter bits/example: " << ((bytesTotal * 8) / static_cast<double>(dataset.size())) << "\n";
         std::cout << "Model size: " << model_bits << " bits\n";
-        std::cout << "Total size: " << (bytes * 8) + model_bits << " bits\n";
-        std::cout << "Total bits/example: " << ((bytes * 8 + model_bits) / static_cast<double>(dataset.size())) << "\n";
+        std::cout << "Total size: " << (bytesTotal * 8) + model_bits << " bits\n";
+        std::cout << "Total bits/example: " << ((bytesTotal * 8 + model_bits) / static_cast<double>(dataset.size())) << "\n";
         std::cout << "Huffman bits: " << huffman_bits << "\n";
-        std::cout << "BuRR Overhead (ribbon size/huffman bits): " << ((bytes * 8) / static_cast<double>(huffman_bits)) << "\n";
+        //std::cout << "BuRR Overhead (ribbon size/huffman bits): " << ((bytes * 8) / static_cast<double>(huffman_bits)) << "\n";
 
         volatile auto sum = 0;
         timer.Start();
-        for (size_t i = 0; i < dataset.size() &&i<LIMIT; ++i) {
+        for (size_t i = 0; i < dataset.size(); ++i) {
             auto example = dataset.get_example(i);
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
@@ -142,17 +149,17 @@ int main(int argc, char *argv[]) {
         timer.Start();
 
         bool ok = true;
-        for (size_t i = 0; i < dataset.size()&&i<LIMIT; ++i) {
+        for (size_t i = 0; i < dataset.size(); ++i) {
             auto example = dataset.get_example(i);
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
-            XXH3_64bits_reset_withSeed(state, 100);
+            XXH3_64bits_reset_withSeed(state, 500);
             XXH3_64bits_update(state, &i, sizeof(size_t));
             XXH3_64bits_update(state, example.data(), example.size_bytes());
             auto hash = XXH3_64bits_digest(state);
             uint64_t corrected_code = r.QueryRetrieval(hash);
             uint64_t filterCode = filter.QueryRetrieval(hash);
-            uint64_t res = coder.decode_once(output, corrected_code, filterCode);
+            uint64_t res = coder::decode_once(output, corrected_code, filterCode);
             bool found = res == label;
             assert(found);
             ok &= found;
@@ -162,6 +169,7 @@ int main(int argc, char *argv[]) {
             std::cerr << "FAILED\n";
         nanos = timer.ElapsedNanos(true);
         std::cout << "Query time: " << nanos << " ns (" << (nanos / static_cast<double>(dataset.size())) << " ns/query)\n";
+
 
         #if 0
         auto repetitions = 10000000;
