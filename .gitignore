@@ -209,3 +209,12 @@ pyrightconfig.json
 
 .idea
 cmake-build-*
+/lrdata/models/covertype_mlp_L1_H50_20250129-161758.tflite
+/lrdata/covertype_X.lrbin
+/lrdata/covertype_y.lrbin
+/lrdata/models/nids_mlp_L1_H50_20250129-163433.tflite
+/lrdata/nids_X.lrbin
+/lrdata/nids_y.lrbin
+/lrdata/models/songs_mlp_L1_H50_20250129-160715.tflite
+/lrdata/songs_X.lrbin
+/lrdata/songs_y.lrbin

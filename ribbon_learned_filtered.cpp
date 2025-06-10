@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
         size_t huffman_bits = 0;
         size_t filter_bits = 0;
 
-        using coder =  learnedretrieval::FilterCoding<learnedretrieval::FilterHuffmanCoder<>>;
+        using coder =  learnedretrieval::FilterCoding<learnedretrieval::FilterFanoCoder<>>;
         auto state = XXH3_createState();
         assert(state);
         size_t maxlenfilter = 0;
@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
             std::cerr << "FAILED\n";
         nanos = timer.ElapsedNanos(true);
         std::cout << "Query time: " << nanos << " ns (" << (nanos / static_cast<double>(dataset.size())) << " ns/query)\n";
-
+std::cout<<learnedretrieval::myfilterbits<<" "<<learnedretrieval::maxFilterCnt<<std::endl;
 
         #if 0
         auto repetitions = 10000000;
