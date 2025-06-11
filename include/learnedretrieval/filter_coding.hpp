@@ -181,7 +181,6 @@ namespace learnedretrieval {
 
                 lastCumFreq = bit ? (lastCumFreq - absoluteFreq) : absoluteFreq;
             }
-            std::reverse(res.begin(), res.end());
             return res;
         }
 
@@ -315,6 +314,7 @@ namespace learnedretrieval {
                 current = tree[current.parent];
                 res.push_back({current.relP, b});
             }
+            std::reverse(res.begin(), res.end());
             return res;
         }
 
@@ -337,9 +337,20 @@ namespace learnedretrieval {
 
     int myfilterbits = 0;
 
-    template<typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float>
+    template<typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 10>
     class FilterCoding {
     public:
+
+        static size_t getFilterBits(size_t currentTotal, float p, size_t depth) {
+            size_t recommended = FilterLengthStrategy::getFilterBits(p, depth);
+            if(recommended + currentTotal <= MAX_FILTER_CODE_LENGTH) {
+                // within bounds
+                return recommended;
+            }
+            // allow as much filter bits as possible
+            return MAX_FILTER_CODE_LENGTH - currentTotal;
+        }
+
         /*
          * get the filter code
          * a 0 in the filter code is stored in a VLR retrieval structure, a 1 is skipped
@@ -350,13 +361,12 @@ namespace learnedretrieval {
             FilterCode res{0, 0};
             for (size_t i = 0; i < probs.size(); ++i) {
                 auto [p, b] = probs[i];
-                uint64_t filterBits = FilterLengthStrategy::getFilterBits(p, probs.size() - i - 1);
-                res.length += filterBits;
-                res.code <<= filterBits;
+                uint64_t filterBits = getFilterBits(res.length, p, i);
                 if (!b) {
-                    res.code |= ((1 << filterBits) - 1);
+                    res.code |= ((1 << filterBits) - 1) << res.length;
                     myfilterbits += filterBits;
                 }
+                res.length += filterBits;
             }
             return res;
         }
@@ -367,14 +377,16 @@ namespace learnedretrieval {
             std::vector<std::pair<float, bool>> probs = coder.getProbabilities(symbol);
 
             FilterCode res{0, 0};
+            size_t totalFilterBitLength=0;
             for (size_t i = 0; i < probs.size(); ++i) {
-                auto [p, b] = probs[probs.size() - i - 1];
+                auto [p, b] = probs[i];
 
-                uint64_t filterBits = FilterLengthStrategy::getFilterBits(p, i);
-                uint64_t nodeFilterBits = filter_code_data & ((1 << filterBits) - 1);
-                filter_code_data >>= filterBits;
+                uint64_t filterBitLength = getFilterBits(totalFilterBitLength, p, i);
+                totalFilterBitLength += filterBitLength;
+                uint64_t filterBits = filter_code_data & ((1 << filterBitLength) - 1);
+                filter_code_data >>= filterBitLength;
 
-                if (nodeFilterBits == ((1 << filterBits) - 1)) {
+                if (filterBits == ((1 << filterBitLength) - 1)) {
                     res.code |= (b << res.length);
                     res.length++;
                 }
@@ -388,10 +400,12 @@ namespace learnedretrieval {
             // the coder has to ensure that at each node the probability of branch 0 is at most 50% (otherwise we would need to swap the filter)
             Coder coder(f);
             int depth = 0;
+            size_t totalFilterBitLength=0;
             while (!coder.hasFinished()) {
                 float probability = coder.getRelProbability();
                 assert(probability <= 0.5);
-                uint64_t filterBitLength = FilterLengthStrategy::getFilterBits(probability, depth);
+                uint64_t filterBitLength = getFilterBits(totalFilterBitLength, probability, depth);
+                totalFilterBitLength+=filterBitLength;
                 uint64_t filterBits = filter_code_data & ((1 << filterBitLength) - 1);
                 filter_code_data >>= filterBitLength;
                 if (filterBits == ((1 << filterBitLength) - 1)) {
