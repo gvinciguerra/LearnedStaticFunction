@@ -17,7 +17,7 @@
 #include "learnedretrieval/dataset_reader.hpp"
 #include "learnedretrieval/model_wrapper.hpp"
 
-using ModelOutputType = float; // uint8
+using ModelOutputType = float; // uint8_t
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
             auto label = dataset.get_label(i);
             auto output = model.invoke(example);
             auto probabilities = model.get_probabilities();
-            auto [code, filterLength] = coder::encode_once_filter(output, label);
+            auto [code, filterLength] = coder::encode_once_filter(probabilities, label);
             XXH3_64bits_reset_withSeed(state, 500);
             XXH3_64bits_update(state, &i, sizeof(size_t));
             XXH3_64bits_update(state, example.data(), example.size_bytes());
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
             uint64_t filterVal = filter.QueryRetrieval(hash);
 
             size_t bit_offset = 0;
-            auto [code, length] = coder::encode_once_corrected_code(output, label, filterVal);
+            auto [code, length] = coder::encode_once_corrected_code(probabilities, label, filterVal);
             input[i].first = hash;
             if (length > maxlen)
                 maxlen = length;
@@ -159,7 +159,7 @@ int main(int argc, char *argv[]) {
             auto hash = XXH3_64bits_digest(state);
             uint64_t corrected_code = r.QueryRetrieval(hash);
             uint64_t filterCode = filter.QueryRetrieval(hash);
-            uint64_t res = coder::decode_once(output, corrected_code, filterCode);
+            uint64_t res = coder::decode_once(model.get_probabilities(), corrected_code, filterCode);
             bool found = res == label;
             assert(found);
             ok &= found;
