@@ -56,7 +56,7 @@ public:
                 throw std::runtime_error("Unsupported input type");
             }
             quantization_params = interpreter->output_tensor(0)->params;
-            rescaled_output.resize(output_dims);
+            rescaled_output.resize(std::max<size_t>(2, output_dims));
         }
 
 
@@ -68,7 +68,7 @@ public:
         }
 
         input_span = std::span<float>(interpreter->typed_input_tensor<float>(0), input_dims);
-        output_span = std::span<T>(interpreter->typed_output_tensor<T>(0), output_dims);
+        output_span = std::span<T>(interpreter->typed_output_tensor<T>(0), std::max<size_t>(2, output_dims));
     }
 
     size_t model_bytes() const { return bytes; }
@@ -76,6 +76,13 @@ public:
     std::span<T> invoke(std::span<const float> example) {
         std::copy(example.begin(), example.end(), input_span.begin());
         interpreter->Invoke();
+        if (output_dims == 1) {
+            output_span[1] = output_span[0];
+            if constexpr (std::is_same_v<T, uint8_t>)
+                output_span[0] = 255 - output_span[0];
+            else
+                output_span[0] = 1 - output_span[0];
+        }
         return output_span;
     }
 
@@ -85,9 +92,9 @@ public:
 
     std::span<float> get_probabilities() {
         if constexpr (std::is_same_v<T, uint8_t>) {
-            for (size_t i = 0; i < output_dims; ++i)
+            for (size_t i = 0; i < rescaled_output.size(); ++i)
                 rescaled_output[i] = (output_span[i] - quantization_params.zero_point) * quantization_params.scale;
-            return std::span<float>(rescaled_output.data(), output_dims);
+            return std::span<float>(rescaled_output.data(), rescaled_output.size());
         } else {
             return output_span;
         }
