@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
         size_t huffman_bits = 0;
         size_t filter_bits = 0;
 
-        using coderType = learnedretrieval::FilterCoding<learnedretrieval::FilterFanoCoder<>>;
+        using coderType = learnedretrieval::FilterCoding<learnedretrieval::FilterFanoCoder>;
         coderType coder = coderType(dataset.classes_count());
         auto state = XXH3_createState();
         assert(state);

@@ -80,8 +80,19 @@ double spaceBinaryFilter(int b, double p) {
     return p + (1 - p) * eps + p * b;
 }
 
-
+int getBucket(float f) {
+    int exp;
+    frexp(f, &exp);
+    return - exp;
+}
 int main(int argc, char *argv[]) {
+
+    static constexpr int BUCKETS = 10;
+    static constexpr float MIN_P = 1.0f / float(1u << BUCKETS);
+
+
+    std::cout<<getBucket(MIN_P)<<std::endl;
+
     std::vector<float> f = {2.10818e-07, 0.00172702, 0.884235, 5.39694e-05, 0.00345404, 0.110529, 1.64702e-09};
     std::cout << std::reduce(f.begin(), f.end()) << std::endl;
     auto coder = FilterFanoCoder(f);
