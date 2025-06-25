@@ -21,6 +21,7 @@
 
 
 namespace learnedretrieval {
+
     struct FilterCode {
         using LengthType = uint64_t;
         uint64_t code;
@@ -51,8 +52,8 @@ namespace learnedretrieval {
         static constexpr double PROBABILITY_THRESHOLDS[MAX_FILTER_BITS] = {0.333333, 0.2, 0.111111, 0.0588235, 0.030303,
                                                                            0.0153846, 0.00775194, 0.00389105,
                                                                            0.00194932, 0.00097561, 0.000488043,
-                0.000244081, 0.000122055, 6.10314e-05,
-                3.05166e-05, /*1.52586e-05, 7.62934e-06, 3.81468e-06, 1.90734e-06, 9.53673e-07, /*4.76837e-07, 2.38419e-07, 1.19209e-07, 5.96046e-08, 2.98023e-08, 1.49012e-08, 7.45058e-09, 3.72529e-09, 1.86265e-09, 9.31323e-10, */};
+                                                                           0.000244081, 0.000122055, 6.10314e-05,
+                                                                           3.05166e-05, /*1.52586e-05, 7.62934e-06, 3.81468e-06, 1.90734e-06, 9.53673e-07, /*4.76837e-07, 2.38419e-07, 1.19209e-07, 5.96046e-08, 2.98023e-08, 1.49012e-08, 7.45058e-09, 3.72529e-09, 1.86265e-09, 9.31323e-10, */};
 
 
     public:
@@ -73,75 +74,87 @@ namespace learnedretrieval {
         struct Elem {
             Frequency f;
             Symbol s;
-            uint64_t cumP;
+            uint64_t code;
 
         public:
-            bool getCumBit(size_t pos) {
-                return (cumP >> pos) & 1;
+            bool getCodeBit(size_t pos) const {
+                return (code >> pos) & 1;
             }
         };
 
-        class Compare {
-        public:
-            bool operator()(Elem a, Elem b) {
-                return a.f < b.f;
-            }
-        };
-
-        size_t n;
-        std::priority_queue<Elem, std::vector<Elem>, Compare> in;
+        const size_t n;
         std::vector<Elem> sorted;
 
         bool flipNext;
         size_t leftBound;
         size_t rightBound;
-        float absoluteFreq = 0;
+        float absoluteFreq;
         size_t center;
         Frequency lastCumFreq;
         static constexpr size_t HIGHEST_BIT = 63;
-        size_t currentBitPos = HIGHEST_BIT - 1;
-        static constexpr uint64_t P_ONE_INT = uint64_t(1) << HIGHEST_BIT;
-        static constexpr float P_ONE = float(P_ONE_INT);
-        float lastCumP = 0;
-        uint64_t lastCumPint = -1;
+        size_t currentBitPos;
 
-        Elem getElem(size_t i) {
-            while (sorted.size() <= i) {
-                Elem e = in.top();
+        static constexpr int BUCKETS = 10;
+        static constexpr float MIN_P = 2.0f / float(1u << BUCKETS);
+        std::array<size_t, BUCKETS> bucketCnt;
 
-                lastCumPint = std::max<uint64_t>(lastCumPint + 1, std::min<uint64_t>(uint64_t(lastCumP * P_ONE),
-                                                                                     P_ONE_INT - n +
-                                                                                     sorted.size())); // make sure all codes are unique
-                e.cumP = lastCumPint;
-                lastCumP += e.f;
-                sorted.push_back(e);
-                in.pop();
-            }
-            return sorted[i];
+        int getBucket(Frequency f) {
+            int exp;
+            frexp(f, &exp);
+            return 1 - exp;
         }
 
     public:
 
-        FilterFanoCoder(const std::span<Frequency> &f) {
-            n = f.size();
-            for (Symbol i = 0; i < f.size(); ++i) {
-                in.push({std::max<Frequency>(f[i],std::numeric_limits<Frequency>::min()), i, 0});
-            }
+        FilterFanoCoder(size_t n) : n(n) {
+            sorted.resize(n);
+        }
+
+        void init(const std::span<Frequency> &f) {
+            bucketCnt = {};
+
+            flipNext = false;
+            currentBitPos = HIGHEST_BIT;
+            absoluteFreq = 0;
             lastCumFreq = 1.0;
             leftBound = 0;
             rightBound = f.size() - 1;
+
+
+            for (Symbol i = 0; i < f.size(); ++i) {
+                int bucket = getBucket(f[i] = std::max(f[i], MIN_P));
+                bucketCnt[bucket]++;
+            }
+            size_t sum = 0;
+            for (size_t i = 0; i < BUCKETS; ++i) {
+                size_t offset = sum;
+                sum += bucketCnt[i];
+                bucketCnt[i] = offset;
+            }
+            for (Symbol i = 0; i < f.size(); ++i) {
+                int b = getBucket(f[i]);
+                size_t pos = bucketCnt[b]++;
+                sorted[pos].s = i;
+                sorted[pos].f = f[i];
+            }
+
+            uint64_t code = 0;
+            for (size_t i = 0; i < f.size(); ++i) {
+                sorted[i].code = code;
+                code += uint64_t(1)<<(HIGHEST_BIT - getBucket(sorted[i].f));
+            }
         }
 
         std::vector<std::pair<float, bool>> getProbabilities(Symbol s) {
             // find the element
             Elem target;
             int i = 0;
-            while ((target = getElem(i++)).s != s);
+            while ((target = sorted[i++]).s != s);
 
 
             std::vector<std::pair<float, bool>> res;
             while (leftBound != rightBound) {
-                absoluteFreq=0;
+                absoluteFreq = 0;
                 int index = leftBound;
                 while (true) {
                     if (index == rightBound + 1) { // all 0 skip
@@ -149,8 +162,8 @@ namespace learnedretrieval {
                         index = leftBound;
                         currentBitPos--;
                     }
-                    Elem e = getElem(index);
-                    if (e.getCumBit(currentBitPos)) {
+                    Elem e = sorted[index];
+                    if (e.getCodeBit(currentBitPos)) {
                         if (index == leftBound) { // all 1 skip
                             absoluteFreq = 0;
                             currentBitPos--;
@@ -165,7 +178,7 @@ namespace learnedretrieval {
                 center = index; // center points to first element with 1 bit in current pos
                 float currentRelFeq = absoluteFreq / lastCumFreq;
 
-                bool bit = target.getCumBit(currentBitPos);
+                bool bit = target.getCodeBit(currentBitPos);
                 if (bit) {
                     leftBound = center;
                 } else {
@@ -185,17 +198,17 @@ namespace learnedretrieval {
         }
 
         float getRelProbability() {
-            absoluteFreq=0;
+            absoluteFreq = 0;
             int index = leftBound;
             while (true) {
-                if (index == rightBound + 1) { // all 0 skip
+                if (index == rightBound + 1) [[unlikely]] { // all 0 skip
                     absoluteFreq = 0;
                     index = leftBound;
                     currentBitPos--;
                 }
-                Elem e = getElem(index);
-                if (e.getCumBit(currentBitPos)) {
-                    if (index == leftBound) { // all 1 skip
+                const Elem e = sorted[index];
+                if (e.getCodeBit(currentBitPos)) [[unlikely]] {
+                    if (index == leftBound) [[unlikely]] { // all 1 skip
                         absoluteFreq = 0;
                         currentBitPos--;
                         continue;
@@ -232,7 +245,7 @@ namespace learnedretrieval {
         }
 
         Symbol getResult() {
-            return getElem(leftBound).s;
+            return sorted[leftBound].s;
         }
 
 
@@ -339,11 +352,17 @@ namespace learnedretrieval {
 
     template<typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 10>
     class FilterCoding {
+        Coder coder;
+
     public:
 
-        static size_t getFilterBits(size_t currentTotal, float p, size_t depth) {
+        FilterCoding(size_t cats) : coder(cats) {
+
+        }
+
+        size_t getFilterBits(size_t currentTotal, float p, size_t depth) {
             size_t recommended = FilterLengthStrategy::getFilterBits(p, depth);
-            if(recommended + currentTotal <= MAX_FILTER_CODE_LENGTH) {
+            if (recommended + currentTotal <= MAX_FILTER_CODE_LENGTH) {
                 // within bounds
                 return recommended;
             }
@@ -355,8 +374,8 @@ namespace learnedretrieval {
          * get the filter code
          * a 0 in the filter code is stored in a VLR retrieval structure, a 1 is skipped
          */
-        static FilterCode encode_once_filter(const std::span<Frequency> &f, Symbol symbol) {
-            Coder coder(f);
+        FilterCode encode_once_filter(const std::span<Frequency> &f, Symbol symbol) {
+            coder.init(f);
             std::vector<std::pair<float, bool>> probs = coder.getProbabilities(symbol);
             FilterCode res{0, 0};
             for (size_t i = 0; i < probs.size(); ++i) {
@@ -371,13 +390,13 @@ namespace learnedretrieval {
             return res;
         }
 
-        static FilterCode
+        FilterCode
         encode_once_corrected_code(const std::span<Frequency> &f, Symbol symbol, uint64_t filter_code_data) {
-            Coder coder(f);
+            coder.init(f);
             std::vector<std::pair<float, bool>> probs = coder.getProbabilities(symbol);
 
             FilterCode res{0, 0};
-            size_t totalFilterBitLength=0;
+            size_t totalFilterBitLength = 0;
             for (size_t i = 0; i < probs.size(); ++i) {
                 auto [p, b] = probs[i];
 
@@ -395,17 +414,17 @@ namespace learnedretrieval {
             return res;
         }
 
-        static Symbol
+        Symbol
         decode_once(const std::span<Frequency> &f, uint64_t corrected_code_data, uint64_t filter_code_data) {
             // the coder has to ensure that at each node the probability of branch 0 is at most 50% (otherwise we would need to swap the filter)
-            Coder coder(f);
+            coder.init(f);
             int depth = 0;
-            size_t totalFilterBitLength=0;
+            size_t totalFilterBitLength = 0;
             while (!coder.hasFinished()) {
                 float probability = coder.getRelProbability();
                 assert(probability <= 0.5);
                 uint64_t filterBitLength = getFilterBits(totalFilterBitLength, probability, depth);
-                totalFilterBitLength+=filterBitLength;
+                totalFilterBitLength += filterBitLength;
                 uint64_t filterBits = filter_code_data & ((1 << filterBitLength) - 1);
                 filter_code_data >>= filterBitLength;
                 if (filterBits == ((1 << filterBitLength) - 1)) {
