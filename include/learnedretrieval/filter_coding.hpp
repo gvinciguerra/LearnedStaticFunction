@@ -103,7 +103,13 @@ namespace learnedretrieval {
         int getBucket(Frequency f) {
             int exp;
             frexp(f, &exp);
-            return -exp;
+            if(f==0) {
+                return BUCKETS-1;
+            }
+            if(f==1) {
+                return 0;
+            }
+            return std::min(BUCKETS-1, -exp);
         }
 
     public:
@@ -119,14 +125,12 @@ namespace learnedretrieval {
             flipNext = false;
             currentBitPos = BUCKETS;
             absoluteFreq = 0;
-            lastCumFreq = 0.0;
+            lastCumFreq = 1.0;
             leftBound = 0;
             rightBound = f.size() - 1;
 
 
             for (Symbol i = 0; i < f.size(); ++i) {
-                f[i] = std::min(0.9999f, std::max(f[i], MIN_P));
-                lastCumFreq += f[i];
                 int bucket = getBucket(f[i]);
                 bucketCnt[bucket]++;
             }
@@ -180,6 +184,7 @@ namespace learnedretrieval {
             }
             center = index;
             float currentRelFeq = absoluteFreq / lastCumFreq;
+            currentRelFeq= std::max(std::min(currentRelFeq, 0.999f), 0.001f);
             flipNext = currentRelFeq > 0.5f;
             if (flipNext) {
                 currentRelFeq = 1.0f - currentRelFeq;
@@ -192,12 +197,12 @@ namespace learnedretrieval {
         }
 
         void nextEncodeBit() {
-            encodeBit=target.getCodeBit(currentBitPos)^flipNext;
+            encodeBit = target.getCodeBit(currentBitPos) ^ flipNext;
             nextBit(encodeBit);
         }
 
         void nextBit(bool bit) {
-            if (bit^flipNext) {
+            if (bit ^ flipNext) {
                 leftBound = center;
                 lastCumFreq = lastCumFreq - absoluteFreq;
             } else {
@@ -242,7 +247,7 @@ namespace learnedretrieval {
         class Compare {
         public:
             bool operator()(Node a, Node b) {
-                return a.index > b.index;
+                return a.p > b.p;
             }
         };
 
@@ -251,13 +256,9 @@ namespace learnedretrieval {
 
         template<bool encode = false>
         void init(const std::span<Frequency> &f, Symbol s = -1) {
-
-            static constexpr int BUCKETS = 10;
-            static constexpr float MIN_P = 1.0f / float(1u << BUCKETS);
-
             std::priority_queue<Node, std::vector<Node>, Compare> nodes;
-            for (size_t i = 0; i < f.size(); ++i) {
-                Node n{i, 0, 0, 0, 0, std::min(0.9999f, std::max(f[i], MIN_P)), 0, i, true};
+            for (Symbol i = 0; i < f.size(); ++i) {
+                Node n{i, 0, 0, 0, 0, f[i], 0, i, true};
                 nodes.push(n);
                 tree.push_back(n);
             }
@@ -295,8 +296,8 @@ namespace learnedretrieval {
                 Node current = tree[s];
                 while (current.index != root.index) {
                     bool b = current.bitRelParent;
-                    encodeCode<<=1;
-                    encodeCode|=b;
+                    encodeCode <<= 1;
+                    encodeCode |= b;
                     current = tree[current.parent];
                 }
             }
@@ -313,7 +314,7 @@ namespace learnedretrieval {
         void nextEncodeBit() {
             lastEncBit = encodeCode & 1;
             nextBit(lastEncBit);
-            encodeCode>>=1;
+            encodeCode >>= 1;
         }
 
         void nextBit(bool bit) {
@@ -329,8 +330,86 @@ namespace learnedretrieval {
         }
     };
 
-    int myfilterbits = 0;
+    template<template<typename S, typename F> typename Coder, typename Symbol, typename Frequency>
+    class Filter50PercentWrapper {
+        Coder<Symbol, Frequency> coder;
+        bool armed;
+        bool exploded;
+        Symbol armedSymbol;
+        std::span<Frequency> fs;
+    public:
+        Filter50PercentWrapper(size_t n) : coder(n) {
+        }
 
+        template<bool encode = false>
+        void init(const std::span<Frequency> &f, Symbol encodeSymbol = -1) {
+            fs = f;
+            exploded = false;
+            armed = false;
+            if constexpr (encode) {
+                if (f[encodeSymbol] > 0.5f) {
+                    armed = true;
+                    armedSymbol = encodeSymbol;
+                    return;
+                }
+            } else {
+                for (Symbol i = 0; i < f.size(); i++) {
+                    if (f[i] > 0.5f) {
+                        armed = true;
+                        armedSymbol = i;
+                        return;
+                    }
+                }
+            }
+            coder.template init<encode>(f, encodeSymbol);
+        }
+
+        float getRelProbabilityAndAdvance() {
+            if (armed) {
+                return std::max(std::min(1.0f-fs[armedSymbol], 0.999f), 0.001f);
+            }
+            return coder.getRelProbabilityAndAdvance();
+        }
+
+        bool hasFinished() {
+            return exploded || (!armed && coder.hasFinished());
+        }
+
+        void nextEncodeBit() {
+            if(armed) {
+                exploded = true;
+            } else {
+                coder.nextEncodeBit();
+            }
+        }
+
+        void nextBit(bool bit) {
+            if (armed) {
+                if (bit) {
+                    exploded = true;
+                    return;
+                } else {
+                    // dissarm
+                    armed = false;
+                    coder.init(fs);
+                    coder.getRelProbabilityAndAdvance();
+                }
+            }
+            coder.nextBit(bit);
+
+        }
+
+        bool getBit() {
+            return exploded ? 1 : coder.getBit();
+        }
+
+        Symbol getResult() {
+            return exploded ? armedSymbol : coder.getResult();
+        }
+
+    };
+
+    int myfilterbits = 0;
     template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 15>
     class FilterCoding {
         Coder<Symbol, Frequency> coder;
@@ -360,19 +439,16 @@ namespace learnedretrieval {
             FilterCode res{0, 0};
             size_t depth = 0;
             while (!coder.hasFinished()) {
-                uint64_t filterBits = getFilterBits(res.length, coder.getRelProbabilityAndAdvance(), depth);
-                assert(coder.getRelProbabilityAndAdvance()<=0.5);
+                float r1=coder.getRelProbabilityAndAdvance();
+                uint64_t filterBits = getFilterBits(res.length, r1, depth);
                 coder.nextEncodeBit();
-                if (!coder.getBit()) {
+                bool r = coder.getBit();
+                if (!r) {
                     res.code |= ((uint64_t(1) << filterBits) - 1) << res.length;
                     myfilterbits += filterBits;
                 }
                 res.length += filterBits;
                 depth++;
-            }
-            if (res.code > (uint64_t(1) << 50)) {
-                std::cerr << res.length;
-                exit(157);
             }
             return res;
         }

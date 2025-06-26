@@ -19,6 +19,10 @@
 
 using ModelOutputType = float; // uint8_t
 
+
+template<typename S, typename F>
+class wrapped : public learnedretrieval::Filter50PercentWrapper<learnedretrieval::FilterFanoCoder, S, F> {};
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         std::cerr << "Usage: " << argv[0] << " <dataset_path> <model_path>" << std::endl;
@@ -44,7 +48,9 @@ int main(int argc, char *argv[]) {
         size_t huffman_bits = 0;
         size_t filter_bits = 0;
 
-        using coderType = learnedretrieval::FilterCoding<learnedretrieval::FilterFanoCoder>;
+
+
+        using coderType = learnedretrieval::FilterCoding<wrapped>;
         coderType coder = coderType(dataset.classes_count());
         auto state = XXH3_createState();
         assert(state);
