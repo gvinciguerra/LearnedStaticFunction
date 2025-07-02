@@ -23,6 +23,8 @@ class ModelWrapper {
 
 public:
 
+    ModelWrapper() = default;
+
     ModelWrapper(const std::string &model_path) {
         if constexpr (std::is_same_v<T, float>) {
             model = tflite::FlatBufferModel::BuildFromFile(model_path.c_str());
