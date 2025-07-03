@@ -47,22 +47,7 @@ target_link_libraries(LearnedRetrieval INTERFACE RibbonVLR tensorflow-lite)
 
 ####################### Benchmark Targets #######################
 if(PROJECT_IS_TOP_LEVEL)
-    add_executable(Main main.cpp)
-    target_link_libraries(Main PUBLIC LearnedRetrieval)
-
-    add_executable(ribbon_learned ribbon_learned.cpp)
-    target_link_libraries(ribbon_learned PUBLIC LearnedRetrieval tlx)
-
-    add_executable(ribbon_learned_novlr ribbon_learned_novlr.cpp)
-    target_link_libraries(ribbon_learned_novlr PUBLIC LearnedRetrieval tlx)
-
-    add_executable(ribbon_huffman ribbon_huffman.cpp)
-    target_link_libraries(ribbon_huffman PUBLIC LearnedRetrieval tlx)
-
-    add_executable(ribbon_huffman_novlr ribbon_huffman_novlr.cpp)
-    target_link_libraries(ribbon_huffman_novlr PUBLIC LearnedRetrieval tlx)
-
-    add_executable(ribbon_learned_filter ribbon_learned_filtered.cpp)
+    add_executable(ribbon_learned_filter ribbon_learned_bench.cpp)
     target_link_libraries(ribbon_learned_filter PUBLIC LearnedRetrieval tlx)
 
     add_executable(filter_tuner filter_tuner.cpp)

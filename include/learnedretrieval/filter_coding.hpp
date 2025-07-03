@@ -21,7 +21,7 @@
 
 
 namespace learnedretrieval {
-    constexpr float eps=0.0000001f;
+    constexpr float EPS=0.0000001f;
 
 
     struct FilterCode {
@@ -47,7 +47,6 @@ namespace learnedretrieval {
         }
     };
 
-    int maxFilterCnt = 0;
 
     class FilterLengthStrategyOpt {
         static constexpr int MAX_FILTER_BITS = 20;
@@ -60,13 +59,9 @@ namespace learnedretrieval {
 
     public:
         static uint64_t getFilterBits(float probability, size_t level) {
-            //if(level>0)return 0;
             size_t bits = 0;
             while (bits < MAX_FILTER_BITS && PROBABILITY_THRESHOLDS[bits] > probability)
                 bits++;
-            if (bits == MAX_FILTER_BITS) {
-                maxFilterCnt++;
-            }
             return bits;
         }
     };
@@ -97,7 +92,6 @@ namespace learnedretrieval {
         size_t currentBitPos;
 
         static constexpr int BUCKETS = 15;
-        static constexpr float MIN_P = 1.0f / float(1u << BUCKETS);
         std::array<size_t, BUCKETS> bucketCnt;
 
         Elem target;
@@ -105,10 +99,9 @@ namespace learnedretrieval {
         int getBucket(Frequency f) {
             int exp;
             frexp(f, &exp);
-            if(f==0) {
+            if(f==0) [[unlikely]]{
                 return BUCKETS-1;
-            }
-            if(f==1) {
+            }else if(f==1) [[unlikely]] {
                 return 0;
             }
             return std::min(BUCKETS-1, -exp);
@@ -180,7 +173,7 @@ namespace learnedretrieval {
             }
             center = index;
             float currentRelFeq = absoluteFreq / lastCumFreq;
-            currentRelFeq= std::max(std::min(currentRelFeq, 1.0f-eps), eps);
+            currentRelFeq= std::max(std::min(currentRelFeq, 1.0f-EPS), EPS);
             flipNext = currentRelFeq > 0.5f;
             if (flipNext) {
                 currentRelFeq = 1.0f - currentRelFeq;
@@ -216,6 +209,10 @@ namespace learnedretrieval {
         Symbol getResult() {
             return sorted[leftBound].s;
         }
+
+        static const std::string get_name() {
+            return "Fano";
+        }
     };
 
 
@@ -243,8 +240,8 @@ namespace learnedretrieval {
         class Compare {
         public:
             bool operator()(Node a, Node b) {
-                //return a.p > b.p;
-                return a.index > b.index;
+                return a.p > b.p;
+                //return a.index > b.index;
             }
         };
 
@@ -265,11 +262,11 @@ namespace learnedretrieval {
                 Node b = nodes.top();
                 nodes.pop();
 
-                if (a.p > b.p) {
+                /*if (a.p > b.p) {
                     Node c = a;
                     a = b;
                     b = c;
-                }
+                }*/
 
                 a.bitRelParent = 0;
                 a.parent = tree.size();
@@ -285,7 +282,7 @@ namespace learnedretrieval {
                 } else {
                     relp=a.p / (a.p + b.p);
                 }
-                relp = std::max(std::min(relp, 1.0f-eps), eps);
+                relp = std::max(std::min(relp, 1.0f-EPS), EPS);
                 Node parent{0, a.index, b.index, 0, 0, a.p + b.p, relp, tree.size(), false};
                 tree.push_back(parent);
                 nodes.push(parent);
@@ -329,6 +326,10 @@ namespace learnedretrieval {
         Symbol getResult() {
             return currentDecodingNode.s;
         }
+
+        static const std::string get_name() {
+            return "Huffman";
+        }
     };
 
     template<template<typename S, typename F> typename Coder, typename Symbol, typename Frequency>
@@ -367,7 +368,7 @@ namespace learnedretrieval {
 
         float getRelProbabilityAndAdvance() {
             if (armed) {
-                return std::max(std::min(1.0f-fs[armedSymbol], 1.0f-eps), eps);
+                return std::max(std::min(1.0f-fs[armedSymbol], 1.0f-EPS), EPS);
             }
             return coder.getRelProbabilityAndAdvance();
         }
@@ -408,16 +409,18 @@ namespace learnedretrieval {
             return exploded ? armedSymbol : coder.getResult();
         }
 
+        static const std::string get_name() {
+            return Coder<Symbol, Frequency>::get_name() + "50";
+        }
     };
 
-    int myfilterbits = 0;
     template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 15>
-    class FilterCoding {
+    class BitWiseFilterCoding {
         Coder<Symbol, Frequency> coder;
 
     public:
 
-        FilterCoding(size_t cats) : coder(cats) {
+        BitWiseFilterCoding(size_t cats) : coder(cats) {
 
         }
 
@@ -446,7 +449,6 @@ namespace learnedretrieval {
                 bool r = coder.getBit();
                 if (!r) {
                     res.code |= ((uint64_t(1) << filterBits) - 1) << res.length;
-                    myfilterbits += filterBits;
                 }
                 res.length += filterBits;
                 depth++;
@@ -502,6 +504,10 @@ namespace learnedretrieval {
                 depth++;
             }
             return coder.getResult();
+        }
+
+        static const std::string get_name() {
+            return Coder<Symbol, Frequency>::get_name();
         }
     };
 

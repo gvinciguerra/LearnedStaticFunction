@@ -99,6 +99,11 @@ public:
     size_t size_in_bytes() const {
         return filterVLR.Size() + correctionVLR.Size();
     }
+
+
+    static const std::string get_name() {
+         return "Filtered-" + Coding::get_name();
+    }
 };
 
 template<typename Model, typename Storage>
