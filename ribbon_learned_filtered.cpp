@@ -50,7 +50,8 @@ int main(int argc, char *argv[]) {
 
 
 
-        using coderType = learnedretrieval::FilterCoding<wrapped>;
+        //using coderType = learnedretrieval::FilterCoding<wrapped>;
+        using coderType = learnedretrieval::FilterCoding<learnedretrieval::FilterHuffmanCoder>;
         coderType coder = coderType(dataset.classes_count());
         auto state = XXH3_createState();
         assert(state);

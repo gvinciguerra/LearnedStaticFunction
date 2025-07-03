@@ -21,6 +21,8 @@
 
 
 namespace learnedretrieval {
+    constexpr float eps=0.0000001f;
+
 
     struct FilterCode {
         using LengthType = uint64_t;
@@ -48,12 +50,12 @@ namespace learnedretrieval {
     int maxFilterCnt = 0;
 
     class FilterLengthStrategyOpt {
-        static constexpr int MAX_FILTER_BITS = 15;
+        static constexpr int MAX_FILTER_BITS = 20;
         static constexpr double PROBABILITY_THRESHOLDS[MAX_FILTER_BITS] = {0.333333, 0.2, 0.111111, 0.0588235, 0.030303,
                                                                            0.0153846, 0.00775194, 0.00389105,
                                                                            0.00194932, 0.00097561, 0.000488043,
                                                                            0.000244081, 0.000122055, 6.10314e-05,
-                                                                           3.05166e-05, /*1.52586e-05, 7.62934e-06, 3.81468e-06, 1.90734e-06, 9.53673e-07, /*4.76837e-07, 2.38419e-07, 1.19209e-07, 5.96046e-08, 2.98023e-08, 1.49012e-08, 7.45058e-09, 3.72529e-09, 1.86265e-09, 9.31323e-10, */};
+                                                                           3.05166e-05, 1.52586e-05, 7.62934e-06, 3.81468e-06, 1.90734e-06, 9.53673e-07, /*4.76837e-07, 2.38419e-07, 1.19209e-07, 5.96046e-08, 2.98023e-08, 1.49012e-08, 7.45058e-09, 3.72529e-09, 1.86265e-09, 9.31323e-10, */};
 
 
     public:
@@ -142,13 +144,7 @@ namespace learnedretrieval {
             }
             for (Symbol i = 0; i < f.size(); ++i) {
                 int b = getBucket(f[i]);
-                if (b >= BUCKETS || b < 0) {
-                    exit(77);
-                }
                 size_t pos = bucketCnt[b]++;
-                if (pos >= n) {
-                    exit(78);
-                }
                 sorted[pos].s = i;
                 sorted[pos].f = f[i];
             }
@@ -184,7 +180,7 @@ namespace learnedretrieval {
             }
             center = index;
             float currentRelFeq = absoluteFreq / lastCumFreq;
-            currentRelFeq= std::max(std::min(currentRelFeq, 0.999f), 0.001f);
+            currentRelFeq= std::max(std::min(currentRelFeq, 1.0f-eps), eps);
             flipNext = currentRelFeq > 0.5f;
             if (flipNext) {
                 currentRelFeq = 1.0f - currentRelFeq;
@@ -247,7 +243,8 @@ namespace learnedretrieval {
         class Compare {
         public:
             bool operator()(Node a, Node b) {
-                return a.p > b.p;
+                //return a.p > b.p;
+                return a.index > b.index;
             }
         };
 
@@ -282,10 +279,14 @@ namespace learnedretrieval {
                 tree[a.index] = a;
                 tree[b.index] = b;
 
-                Node parent{0, a.index, b.index, 0, 0, a.p + b.p, a.p / (a.p + b.p), tree.size(), false};
-                if (std::isnan(parent.relP)) {
-                    parent.relP = 0.5;
+                float relp;
+                if(a.p+b.p==0){
+                    relp=0.5f;
+                } else {
+                    relp=a.p / (a.p + b.p);
                 }
+                relp = std::max(std::min(relp, 1.0f-eps), eps);
+                Node parent{0, a.index, b.index, 0, 0, a.p + b.p, relp, tree.size(), false};
                 tree.push_back(parent);
                 nodes.push(parent);
             }
@@ -366,7 +367,7 @@ namespace learnedretrieval {
 
         float getRelProbabilityAndAdvance() {
             if (armed) {
-                return std::max(std::min(1.0f-fs[armedSymbol], 0.999f), 0.001f);
+                return std::max(std::min(1.0f-fs[armedSymbol], 1.0f-eps), eps);
             }
             return coder.getRelProbabilityAndAdvance();
         }
@@ -410,7 +411,7 @@ namespace learnedretrieval {
     };
 
     int myfilterbits = 0;
-    template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 15>
+    template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 63>
     class FilterCoding {
         Coder<Symbol, Frequency> coder;
 
