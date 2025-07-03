@@ -18,7 +18,7 @@ public:
     FilteredRetrievalStorage() :coder(0) { }
 
     template<typename F>
-    void build(size_t n, size_t classes_count, F get, std::map<std::string, double> stats) {
+    void build(size_t n, size_t classes_count, F get) {
         rocksdb::StopWatchNano timer(true);
         size_t huffman_bits = 0;
         size_t filter_bits = 0;
@@ -44,21 +44,9 @@ public:
 
         size_t maxlen = 0;
         auto input = std::make_unique<std::pair<Key, ResultRowVLR>[]>(n);
-        entropy = 0;
-        size_t numCorrectIsMoreThan50 = 0;
         for (size_t i = 0; i < n; ++i) {
             auto [hash, label, probabilities] = get(i);
-            if (probabilities[label] > 0) {
-                entropy += -std::log2(probabilities[label]);
-            }
-            size_t maxIdx = std::max_element(probabilities.begin(), probabilities.end()) - probabilities.begin();
-            if (maxIdx == label && probabilities[label] > 0.5) {
-                ++numCorrectIsMoreThan50;
-            }
-            // get the output filter
             uint64_t filterVal = filterVLR.QueryRetrieval(hash);
-
-            size_t bit_offset = 0;
             auto [code, length] = coder.encode_once_corrected_code(probabilities, label, filterVal);
             input[i].first = hash;
             if (length > maxlen)
@@ -67,10 +55,6 @@ public:
             huffman_bits += length;
         }
 
-        entropy /= n;
-        std::cout << "Entropy: " << entropy << "\n";
-        std::cout << "Correct guess has >50% prob: " << (numCorrectIsMoreThan50 / static_cast<double>(n))
-                  << "\n";
         auto nanos = timer.ElapsedNanos(true);
         std::cout << "Preprocessing time (including filter): " << nanos << " ns ("
                   << (nanos / static_cast<double>(n)) << " ns/item)\n";
@@ -122,7 +106,6 @@ class LearnedRetrieval {
     XXH3_state_t *state;
     Model &model;
     Storage storage;
-    std::map<std::string, double> stats;
 
 public:
 
@@ -137,8 +120,7 @@ public:
                 auto example = dataset.get_example(i);
                 model.invoke(example);
                 return std::make_tuple(hash(i, example), dataset.get_label(i), model.get_probabilities());
-            },
-            stats);
+            });
 
         std::cout << "Model size: " << model_bytes() * 8 << " bits\n";
         std::cout << "Total size: " << size_in_bytes() * 8 << " bits\n";
@@ -161,6 +143,8 @@ public:
     double get_entropy() const { return storage.entropy; }
 
     size_t model_bytes() const { return model.model_bytes(); }
+
+    size_t storage_bytes() const { return storage.size_in_bytes(); }
 
     size_t size_in_bytes() const { return storage.size_in_bytes() + model.model_bytes(); }
 
