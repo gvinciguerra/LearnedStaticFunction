@@ -8,3 +8,6 @@
 	path = lib/burr-vl
 	url = https://github.com/lorenzhs/BuRR.git
 	branch = variable-bitlength
+[submodule "lib/tlx"]
+	path = lib/tlx
+	url = https://github.com/tlx/tlx.git

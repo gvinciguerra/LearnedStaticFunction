@@ -49,8 +49,8 @@ public:
 
     size_t classes_count() const { return num_classes; }
 
-    std::span<const float> get_example(size_t i) { return {&examples[i * num_features], num_features}; }
+    std::span<const float> get_example(size_t i) const { return {&examples[i * num_features], num_features}; }
 
-    label_type get_label(size_t i) { return labels[i]; }
+    label_type get_label(size_t i) const { return labels[i]; }
 };
 }

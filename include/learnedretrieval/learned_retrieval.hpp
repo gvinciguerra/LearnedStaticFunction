@@ -5,16 +5,13 @@
 #include "learnedretrieval/model_wrapper.hpp"
 
 namespace learnedretrieval {
+
+    template<typename Coding>
 class FilteredRetrievalStorage {
-    template<typename S, typename F>
-    class wrapped : public learnedretrieval::Filter50PercentWrapper<learnedretrieval::FilterFanoCoder, S, F> {};
-
     using Config = ribbon::RConfig<64, 1, ribbon::ThreshMode::onebit, false, true, false, 0, uint64_t>;
-    ribbon::ribbon_filter<4, Config> r;
-    ribbon::ribbon_filter<4, Config> filter;
-    using coderType = learnedretrieval::FilterCoding<wrapped>;
-    coderType coder;
-
+    ribbon::ribbon_filter<4, Config> correctionVLR;
+    ribbon::ribbon_filter<4, Config> filterVLR;
+    Coding coder;
 public:
     double entropy;
 
@@ -28,7 +25,7 @@ public:
         using namespace ribbon;
         IMPORT_RIBBON_CONFIG(Config);
 
-        coder = coderType(classes_count);
+        coder = Coding(classes_count);
         size_t maxlenfilter = 0;
         auto inputFilter = std::make_unique<std::pair<Key, ResultRowVLR>[]>(n);
         for (size_t i = 0; i < n; ++i) {
@@ -41,9 +38,9 @@ public:
             filter_bits += filterLength;
         }
 
-        filter = ribbon_filter<4, Config>(0.90625, 42, maxlenfilter);
-        filter.AddRange(inputFilter.get(), inputFilter.get() + n, true);
-        filter.BackSubst();
+        filterVLR = ribbon_filter<4, Config>(0.90625, 42, maxlenfilter);
+        filterVLR.AddRange(inputFilter.get(), inputFilter.get() + n, true);
+        filterVLR.BackSubst();
 
         size_t maxlen = 0;
         auto input = std::make_unique<std::pair<Key, ResultRowVLR>[]>(n);
@@ -59,7 +56,7 @@ public:
                 ++numCorrectIsMoreThan50;
             }
             // get the output filter
-            uint64_t filterVal = filter.QueryRetrieval(hash);
+            uint64_t filterVal = filterVLR.QueryRetrieval(hash);
 
             size_t bit_offset = 0;
             auto [code, length] = coder.encode_once_corrected_code(probabilities, label, filterVal);
@@ -78,9 +75,9 @@ public:
         std::cout << "Preprocessing time (including filter): " << nanos << " ns ("
                   << (nanos / static_cast<double>(n)) << " ns/item)\n";
 
-        r =  ribbon_filter<4, Config>(0.90625, 144, maxlen);
-        r.AddRange(input.get(), input.get() + n);
-        r.BackSubst();
+        correctionVLR =  ribbon_filter<4, Config>(0.90625, 144, maxlen);
+        correctionVLR.AddRange(input.get(), input.get() + n);
+        correctionVLR.BackSubst();
 
         auto nanos2 = timer.ElapsedNanos(true);
         std::cout << "Ribbon construction time: " << nanos2 << " ns (" << (nanos2 / static_cast<double>(n))
@@ -92,8 +89,8 @@ public:
 
         std::cout << "Max length correction: " << maxlen << "\n";
         std::cout << "Max length filter: " << maxlenfilter << "\n";
-        const size_t bytesFilter = filter.Size();
-        const size_t bytes = r.Size();
+        const size_t bytesFilter = filterVLR.Size();
+        const size_t bytes = correctionVLR.Size();
         const size_t bytesTotal = bytes + bytesFilter;
         std::cout << "Ribbon size: " << (bytes * 8) << " bits\n";
         std::cout << "Filter size: " << (bytesFilter * 8) << " bits\n";
@@ -105,8 +102,8 @@ public:
     }
 
     std::pair<uint64_t, uint64_t> query_storage(uint64_t hash) {
-        uint64_t corrected_code = r.QueryRetrieval(hash);
-        uint64_t filterCode = filter.QueryRetrieval(hash);
+        uint64_t corrected_code = correctionVLR.QueryRetrieval(hash);
+        uint64_t filterCode = filterVLR.QueryRetrieval(hash);
         return {corrected_code, filterCode};
     }
 
@@ -116,25 +113,23 @@ public:
     }
 
     size_t size_in_bytes() const {
-        return filter.Size() + r.Size();
+        return filterVLR.Size() + correctionVLR.Size();
     }
 };
 
-template<typename Storage = FilteredRetrievalStorage>
+template<typename Model, typename Storage>
 class LearnedRetrieval {
-    using ModelOutputType = float; // uint8_t
     XXH3_state_t *state;
-    learnedretrieval::ModelWrapper<ModelOutputType> model;
-    FilteredRetrievalStorage storage;
+    Model &model;
+    Storage storage;
     std::map<std::string, double> stats;
 
 public:
 
-    LearnedRetrieval(learnedretrieval::BinaryDatasetReader &dataset, const std::string &model_path) {
+    LearnedRetrieval(const learnedretrieval::BinaryDatasetReader &dataset, Model &model) : model(model) {
         state = XXH3_createState();
         assert(state);
-        model = learnedretrieval::ModelWrapper<ModelOutputType>(model_path);
-        storage = FilteredRetrievalStorage();
+        storage = Storage();
         storage.build(
             dataset.size(),
             dataset.classes_count(),

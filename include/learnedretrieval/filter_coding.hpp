@@ -96,7 +96,7 @@ namespace learnedretrieval {
         Frequency lastCumFreq;
         size_t currentBitPos;
 
-        static constexpr int BUCKETS = 10;
+        static constexpr int BUCKETS = 15;
         static constexpr float MIN_P = 1.0f / float(1u << BUCKETS);
         std::array<size_t, BUCKETS> bucketCnt;
 
@@ -411,7 +411,7 @@ namespace learnedretrieval {
     };
 
     int myfilterbits = 0;
-    template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 63>
+    template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 15>
     class FilterCoding {
         Coder<Symbol, Frequency> coder;
 

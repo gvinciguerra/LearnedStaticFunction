@@ -1,41 +1,39 @@
 #include <atomic>
 #include <cstdlib>
-#include <numeric>
 #include <thread>
-#include <vector>
 #include <iostream>
-#include <chrono>
+#include <tlx/cmdline_parser.hpp>
+#include <filesystem>
 
 #include "ribbon.hpp"
 #include "serialization.hpp"
 #include "rocksdb/stop_watch.h"
 
-#include <tlx/cmdline_parser.hpp>
-#include <tlx/logger.hpp>
-
 #include "learnedretrieval/learned_retrieval.hpp"
+
+std::string rootDir = "lrdata/";
+std::string modelInput = "all";
+std::string dataSetInput = "all";
+std::string storageInput = "all";
+
+
+void printResult(const std::vector<std::string> &benchOutput) {
+    std::cout << std::endl << "RESULT ";
+    for (auto s: benchOutput) {
+        std::cout << s << " ";
+    }
+    std::cout << std::endl;
+};
 
 
 template<typename S, typename F>
-class wrapped : public learnedretrieval::Filter50PercentWrapper<learnedretrieval::FilterFanoCoder, S, F> {};
+class fano50 : public learnedretrieval::Filter50PercentWrapper<learnedretrieval::FilterFanoCoder, S, F> {
+};
 
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <dataset_path> <model_path>" << std::endl;
-        return 1;
-    }
+template<typename Storage, typename Model>
+void bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput) {
 
-    auto dataset_path = argv[1];
-    auto model_path = argv[2];
-
-    learnedretrieval::BinaryDatasetReader dataset(dataset_path);
-
-    std::cout << "Dataset:" << std::endl
-              << "  Examples: " << dataset.size() << std::endl
-              << "  Features: " << dataset.features_count() << std::endl
-              << "  Classes:  " << dataset.classes_count() << std::endl;
-
-    learnedretrieval::LearnedRetrieval<learnedretrieval::FilteredRetrievalStorage> lr(dataset, model_path);
+    learnedretrieval::LearnedRetrieval<Model, Storage> lr(dataset, model);
     rocksdb::StopWatchNano timer(true);
     volatile auto sum = 0;
     timer.Start();
@@ -78,5 +76,80 @@ int main(int argc, char *argv[]) {
               << " ns/query)\n";
     std::cout << learnedretrieval::myfilterbits << " " << learnedretrieval::maxFilterCnt << std::endl;
 
-    return 0;
+    printResult(benchOutput);
+}
+
+template<typename Model>
+void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput) {
+    bool allStorage = storageInput == "all";
+
+    if (allStorage or storageInput == "filter_huf") {
+        bemchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::FilterCoding<learnedretrieval::FilterHuffmanCoder>>, Model>(
+                dataset, model, benchOutput);
+    }
+    if (allStorage or storageInput == "filter_fano") {
+        bemchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::FilterCoding<learnedretrieval::FilterFanoCoder>>, Model>(
+                dataset, model, benchOutput);
+    }
+    if (allStorage or storageInput == "filter_fano50") {
+        bemchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::FilterCoding<fano50>>, Model>(dataset,
+                                                                                                             model, benchOutput);
+    }
+}
+
+
+void dispatchModel(const std::string &datasetName) {
+    typedef learnedretrieval::ModelWrapper<float> Model;
+
+    learnedretrieval::BinaryDatasetReader dataset(rootDir + datasetName);
+
+    std::vector<std::string> benchOutput;
+
+    std::cout << "Dataset:" << std::endl
+              << "  Examples: " << dataset.size() << std::endl
+              << "  Features: " << dataset.features_count() << std::endl
+              << "  Classes:  " << dataset.classes_count() << std::endl;
+
+    if (modelInput == "all") {
+        for (const auto &entry: std::filesystem::directory_iterator(rootDir)) {
+            const std::filesystem::path &p = entry.path();
+            std::string fileName = p.filename().string();
+            if (fileName.starts_with(datasetName) and fileName.ends_with(".tflite")) {
+                Model model(p);
+                dispatchStorage<Model>(dataset, model, benchOutput);
+            }
+        }
+    } else {
+        Model model(rootDir + modelInput);
+        dispatchStorage<Model>(dataset, model, benchOutput);
+    }
+}
+
+
+void dispatchDataSet() {
+    if (dataSetInput == "all") {
+        for (const auto &entry: std::filesystem::directory_iterator(rootDir)) {
+            std::string p = entry.path().filename().string();
+            if (p.ends_with("y.lrbin")) {
+                dispatchModel(p.substr(0, p.find('_')));
+            }
+        }
+    } else {
+        dispatchModel(dataSetInput);
+    }
+}
+
+int main(int argc, char *argv[]) {
+    tlx::CmdlineParser cmd;
+    cmd.add_string('r', "rootDir", rootDir, "Path to the directory containing mdata and models");
+    cmd.add_string('d', "datasetPath", dataSetInput, "Name of dataset or all");
+    cmd.add_string('m', "modelPath", modelInput, "Name of model or all");
+    cmd.add_string('s', "storage", storageInput, "Name of dataset or all");
+
+    if (!cmd.process(argc, argv)) {
+        cmd.print_usage();
+        return EXIT_FAILURE;
+    }
+    dispatchDataSet();
+    return EXIT_SUCCESS;
 }
