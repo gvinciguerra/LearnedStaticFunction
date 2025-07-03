@@ -84,7 +84,7 @@ namespace learnedretrieval {
             }
         };
 
-        const size_t n;
+        size_t n;
         std::vector<Elem> sorted;
 
         bool encodeBit;
