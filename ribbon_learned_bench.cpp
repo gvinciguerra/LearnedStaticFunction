@@ -159,6 +159,17 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const learnedretri
             if (fileName.starts_with(datasetName) and fileName.ends_with(".tflite") and
                 (modelInput == ALL or fileName.contains(modelInput))) {
                 try {
+                    auto evalFile = p.string() + "_eval.txt";
+                    std::ifstream evalStream;
+                    evalStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+                    evalStream.open(evalFile);
+                    std::string line;
+                    std::getline(evalStream, line);
+                    std::istringstream iss(line);
+                    std::string token;
+                    while (iss >> token)
+                        benchOutput.push_back(token);
+
                     Model model(p);
                     dispatchStorage<Model>(dataset, model, benchOutput, query_runs, fileName);
                 } catch (std::runtime_error &e) {
