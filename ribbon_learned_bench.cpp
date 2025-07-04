@@ -18,7 +18,7 @@ std::string dataSetInput = ALL;
 std::string storageInput = ALL;
 size_t queriesMin = 1e6;
 
-typedef learnedretrieval::ModelWrapper<float> Model;
+typedef learnedretrieval::ModelWrapper Model;
 
 void printResult(const std::vector<std::string> &benchOutput) {
     std::cout << std::endl << "RESULT ";

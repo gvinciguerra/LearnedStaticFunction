@@ -123,8 +123,7 @@ public:
             dataset.classes_count(),
             [&](size_t i) {
                 auto example = dataset.get_example(i);
-                model.invoke(example);
-                return std::make_tuple(hash(i, example), dataset.get_label(i), model.get_probabilities());
+                return std::make_tuple(hash(i, example), dataset.get_label(i), model.invoke(example));
             });
 
         std::cout << "Model size: " << model_bytes() * 8 << " bits\n";
@@ -133,8 +132,7 @@ public:
     }
 
     std::span<float> query_probabilities(std::span<const float> features) {
-        model.invoke(features);
-        return model.get_probabilities();
+        return model.invoke(features);
     }
 
     auto query_storage(uint64_t key, std::span<const float> features) {
