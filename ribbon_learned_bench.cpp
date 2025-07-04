@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cstdlib>
+#include <cmath>
 #include <thread>
 #include <iostream>
 #include <tlx/cmdline_parser.hpp>
@@ -98,7 +99,8 @@ void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model
     benchOutput.push_back("model_name=" + modelName);
     double entropy = 0;
     for (int i = 0; i < dataset.size(); ++i) {
-        entropy -= log2(model.invoke(dataset.get_example(i))[dataset.get_label(i)]);
+        constexpr float min_prob = std::pow(2.f, -31.f);
+        entropy -= std::log2(std::max(model.invoke(dataset.get_example(i))[dataset.get_label(i)], min_prob));
     }
     benchOutput.push_back("cross_entropy_bit_per_key=" + std::to_string(entropy / dataset.size()));
 
