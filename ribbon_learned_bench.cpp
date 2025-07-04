@@ -38,6 +38,8 @@ void
 bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput,
           size_t query_runs) {
 
+    std::cout << "### Next storage: " << Storage::get_name() << std::endl;
+
     benchOutput.push_back("storage_name=" + Storage::get_name());
     learnedretrieval::LearnedRetrieval<Model, Storage> lr(dataset, model);
     benchOutput.push_back("storage_bits=" + std::to_string(lr.size_in_bytes()));
@@ -93,6 +95,9 @@ bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, st
 template<typename Model>
 void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model &model,
                      std::vector<std::string> benchOutput, size_t query_runs, std::string modelName) {
+    std::cout << "### Next model: " << modelName << std::endl;
+
+
     // model
     benchOutput.push_back("model_bits=" + std::to_string(8 * model.model_bytes()));
     benchOutput.push_back("model_name=" + modelName);
@@ -149,7 +154,8 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const learnedretri
         } else {
             const std::filesystem::path &p = entry.path();
             std::string fileName = p.filename().string();
-            if (fileName.starts_with(datasetName) and fileName.ends_with(".tflite")) {
+            if (fileName.starts_with(datasetName) and fileName.ends_with(".tflite") and
+                (modelInput == ALL or fileName.contains(modelInput))) {
                 try {
                     Model model(p);
                     dispatchStorage<Model>(dataset, model, benchOutput, query_runs, fileName);
@@ -165,6 +171,7 @@ void dispatchModel(const std::string &datasetName) {
     std::vector<std::string> benchOutput;
 
     // dataset
+    std::cout << "### Next dataset: " << datasetName << std::endl;
     benchOutput.push_back("dataset_name=" + datasetName);
     learnedretrieval::BinaryDatasetReader dataset(rootDir + datasetName);
 
@@ -173,10 +180,11 @@ void dispatchModel(const std::string &datasetName) {
     for (int i = 0; i < dataset.size(); ++i) {
         cnt[dataset.get_label(i)]++;
     }
-    auto sum = float(std::accumulate(cnt.begin(), cnt.end(), 0));
-    float entropy = 0;
+    auto sum = double(std::accumulate(cnt.begin(), cnt.end(), 0));
+    double entropy = 0;
     for (size_t c: cnt) {
-        entropy -= log(float(c) / sum);
+        double p = double(c) / sum;
+        entropy -= p * log(p);
     }
     benchOutput.push_back("entropy=" + std::to_string(entropy));
     benchOutput.push_back("examples=" + std::to_string(dataset.size()));
@@ -187,12 +195,7 @@ void dispatchModel(const std::string &datasetName) {
     benchOutput.push_back("num_queries=" + std::to_string(query_runs * dataset.size()));
 
     // model
-    if (modelInput == ALL) {
-        dispatchAllModelsRecurse(datasetName, dataset, benchOutput, query_runs, rootDir);
-    } else {
-        Model model(rootDir + modelInput);
-        dispatchStorage<Model>(dataset, model, benchOutput, query_runs, modelInput);
-    }
+    dispatchAllModelsRecurse(datasetName, dataset, benchOutput, query_runs, rootDir);
 }
 
 
@@ -213,7 +216,7 @@ int main(int argc, char *argv[]) {
     tlx::CmdlineParser cmd;
     cmd.add_string('r', "rootDir", rootDir, "Path to the directory containing mdata and models");
     cmd.add_string('d', "datasetPath", dataSetInput, "Name of dataset or all");
-    cmd.add_string('m', "modelPath", modelInput, "Name of model or all");
+    cmd.add_string('m', "modelPath", modelInput, "Includes all models that have the substring in their filename or all");
     cmd.add_string('s', "storage", storageInput, "Name of dataset or all");
     cmd.add_bytes('q', "num_queries_min", queriesMin, "Minimal number of queries");
 
