@@ -12,12 +12,15 @@
 
 #include "learnedretrieval/learned_retrieval.hpp"
 
+#define QUERIES 10000000
+#define REPEATS 3
+#define TOT_QUERIES (QUERIES*REPEATS)
+
 std::string rootDir = "lrdata/";
 constexpr std::string ALL = "all";
 std::string modelInput = ALL;
 std::string dataSetInput = ALL;
 std::string storageInput = ALL;
-size_t queriesMin = 1e6;
 
 typedef learnedretrieval::ModelWrapper Model;
 
@@ -36,47 +39,59 @@ class FilteredFano50 : public learnedretrieval::Filter50PercentWrapper<learnedre
 
 template<typename Storage, typename Model>
 void
-bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput,
-          size_t query_runs) {
+bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput) {
 
     std::cout << "### Next storage: " << Storage::get_name() << std::endl;
 
     benchOutput.push_back("storage_name=" + Storage::get_name());
-    learnedretrieval::LearnedRetrieval<Model, Storage> lr(dataset, model);
-    benchOutput.push_back("storage_bits=" + std::to_string(lr.size_in_bytes()));
     rocksdb::StopWatchNano timer(true);
+
+    learnedretrieval::LearnedRetrieval<Model, Storage> lr(dataset, model);
+
+    auto nanos = timer.ElapsedNanos(true);
+    std::cout << "Total Construct " << nanos << " ns ("
+              << (nanos / static_cast<double>(dataset.size())) << " ns/key)\n";
+
+    benchOutput.push_back("construct_ms=" + std::to_string(double(nanos) / 1000.0 / 1000.0));
+    benchOutput.push_back("storage_bits=" + std::to_string(8.0 * lr.size_in_bytes() / double(dataset.size())));
     volatile uint64_t sum = 0;
+
+    std::vector<uint32_t> queries(QUERIES);
+    std::mt19937 gen(42);
+    std::uniform_int_distribution<uint32_t> dist(0, dataset.size() - 1);
+    for (auto &query: queries) {
+        query = dist(gen);
+    }
 
     timer.Start();
 
-    for (size_t r = 0; r < query_runs; ++r) {
-        for (size_t i = 0; i < dataset.size(); ++i) {
+    for (auto repeat = 0; repeat < REPEATS; ++repeat) {
+        for (auto i: queries) {
             auto example = dataset.get_example(i);
             auto output = lr.query_probabilities(example);
             sum += output[0] + lr.query_storage(i, example).first;
         }
     }
-    auto nanos = timer.ElapsedNanos(true);
-    std::cout << "Model inference and retrieval time " << nanos << " ns ("
-              << (nanos / static_cast<double>(query_runs * dataset.size())) << " ns/query)\n";
-
-    benchOutput.push_back("inf_retrieval_nanos=" + std::to_string(nanos));
+    nanos = timer.ElapsedNanos(true);
+    auto nanosKey = nanos / static_cast<double>(TOT_QUERIES);
+    std::cout << "Model inference and retrieval time " << nanos << " ns (" << (nanosKey) << " ns/query)\n";
+    benchOutput.push_back("inf_retrieval_nanos=" + std::to_string(nanosKey));
     timer.Start();
 
-    bool ok = true;
-
-    for (size_t r = 0; r < query_runs; ++r) {
-        for (size_t i = 0; i < dataset.size(); ++i) {
+    auto start = std::chrono::high_resolution_clock::now();
+    for (auto repeat = 0; repeat < REPEATS; ++repeat) {
+        for (auto i: queries) {
             auto example = dataset.get_example(i);
             uint64_t res = lr.query(i, example);
             sum += res;
         }
     }
     nanos = timer.ElapsedNanos(true);
-    std::cout << "Total query time: " << nanos << " ns (" << (nanos / static_cast<double>(query_runs * dataset.size()))
-              << " ns/query)\n";
-    benchOutput.push_back("query_nanos=" + std::to_string(nanos));
+    nanosKey = nanos / static_cast<double>(TOT_QUERIES * dataset.size());
+    std::cout << "Total query time: " << nanos << " ns (" << nanosKey << " ns/query)\n";
+    benchOutput.push_back("query_nanos=" + std::to_string(nanosKey));
 
+    bool ok = true;
     for (size_t i = 0; i < dataset.size(); ++i) {
         auto example = dataset.get_example(i);
         auto label = dataset.get_label(i);
@@ -93,15 +108,34 @@ bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, st
     printResult(benchOutput);
 }
 
+std::string extraxt(std::string name, std::string prefix) {
+    std::string suffix = name.substr(name.find(prefix) + 1, name.length());
+    return suffix.substr(0, suffix.find('_'));
+}
+
 template<typename Model>
 void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model &model,
-                     std::vector<std::string> benchOutput, size_t query_runs, std::string modelName) {
+                     std::vector<std::string> benchOutput, std::string modelName,
+                     std::filesystem::path modelPath) {
     std::cout << "### Next model: " << modelName << std::endl;
 
 
     // model
+    auto evalFile = modelPath.string() + "_eval.txt";
+    std::ifstream evalStream;
+    evalStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    evalStream.open(evalFile);
+    std::string line;
+    std::getline(evalStream, line);
+    std::istringstream iss(line);
+    std::string token;
+    while (iss >> token)
+        benchOutput.push_back(token);
+
     benchOutput.push_back("model_bits=" + std::to_string(8 * model.model_bytes()));
     benchOutput.push_back("model_name=" + modelName);
+    benchOutput.push_back("model_l=" + extraxt(modelName, "_L"));
+    benchOutput.push_back("model_h=" + extraxt(modelName, "_H"));
     double entropy = 0;
     for (int i = 0; i < dataset.size(); ++i) {
         constexpr float min_prob = std::pow(2.f, -31.f);
@@ -110,10 +144,16 @@ void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model
     benchOutput.push_back("cross_entropy_bit_per_key=" + std::to_string(entropy / dataset.size()));
 
     rocksdb::StopWatchNano timer(true);
+    std::vector<uint32_t> queries(QUERIES);
+    std::mt19937 gen(42);
+    std::uniform_int_distribution<uint32_t> dist(0, dataset.size() - 1);
+    for (auto &query: queries) {
+        query = dist(gen);
+    }
     volatile auto sum = 0;
     timer.Start();
-    for (size_t r = 0; r < query_runs; ++r) {
-        for (size_t i = 0; i < dataset.size(); ++i) {
+    for (auto repeat = 0; repeat < REPEATS; ++repeat) {
+        for (auto i: queries) {
             auto example = dataset.get_example(i);
             auto output = model.invoke(example);
             sum += output[0];
@@ -122,36 +162,35 @@ void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model
     auto nanos = timer.ElapsedNanos(true);
 
     std::cout << "Model inference time: " << nanos << " ns ("
-              << (nanos / static_cast<double>(query_runs * dataset.size()))
+              << (nanos / static_cast<double>(TOT_QUERIES))
               << " ns/query)\n";
 
-    benchOutput.push_back("model_inf_ns=" + std::to_string(nanos / static_cast<double>(query_runs * dataset.size())));
+    benchOutput.push_back("model_inf_ns=" + std::to_string(nanos / static_cast<double>(TOT_QUERIES)));
 
     // storage
     bool allStorage = storageInput == ALL;
 
     if (allStorage or storageInput == "filter_huf") {
         bemchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::BitWiseFilterCoding<learnedretrieval::FilterHuffmanCoder>>, Model>(
-                dataset, model, benchOutput, query_runs);
+                dataset, model, benchOutput);
     }
     if (allStorage or storageInput == "filter_fano") {
         bemchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::BitWiseFilterCoding<learnedretrieval::FilterFanoCoder>>, Model>(
-                dataset, model, benchOutput, query_runs);
+                dataset, model, benchOutput);
     }
     if (allStorage or storageInput == "filter_fano50") {
         bemchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::BitWiseFilterCoding<FilteredFano50>>, Model>(
                 dataset,
                 model,
-                benchOutput,
-                query_runs);
+                benchOutput);
     }
 }
 
 void dispatchAllModelsRecurse(const std::string &datasetName, const learnedretrieval::BinaryDatasetReader &dataset,
-                              std::vector<std::string> benchOutput, size_t query_runs, std::string dir) {
+                              std::vector<std::string> benchOutput, std::string dir) {
     for (const auto &entry: std::filesystem::directory_iterator(dir)) {
         if (entry.is_directory()) {
-            dispatchAllModelsRecurse(datasetName, dataset, benchOutput, query_runs,
+            dispatchAllModelsRecurse(datasetName, dataset, benchOutput,
                                      dir + "/" + entry.path().filename().string());
         } else {
             const std::filesystem::path &p = entry.path();
@@ -159,19 +198,8 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const learnedretri
             if (fileName.starts_with(datasetName) and fileName.ends_with(".tflite") and
                 (modelInput == ALL or fileName.contains(modelInput))) {
                 try {
-                    auto evalFile = p.string() + "_eval.txt";
-                    std::ifstream evalStream;
-                    evalStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-                    evalStream.open(evalFile);
-                    std::string line;
-                    std::getline(evalStream, line);
-                    std::istringstream iss(line);
-                    std::string token;
-                    while (iss >> token)
-                        benchOutput.push_back(token);
-
                     Model model(p);
-                    dispatchStorage<Model>(dataset, model, benchOutput, query_runs, fileName);
+                    dispatchStorage<Model>(dataset, model, benchOutput, fileName, p);
                 } catch (std::runtime_error &e) {
                     std::cerr << "Skipping model " << fileName << " because of " << e.what() << std::endl;
                 }
@@ -180,8 +208,7 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const learnedretri
     }
 }
 
-void dispatchModel(const std::string &datasetName) {
-    std::vector<std::string> benchOutput;
+void dispatchModel(const std::string &datasetName, std::vector<std::string> benchOutput) {
 
     // dataset
     std::cout << "### Next dataset: " << datasetName << std::endl;
@@ -204,24 +231,21 @@ void dispatchModel(const std::string &datasetName) {
     benchOutput.push_back("features=" + std::to_string(dataset.features_count()));
     benchOutput.push_back("classes=" + std::to_string(dataset.classes_count()));
 
-    size_t query_runs = (queriesMin + dataset.size() - 1) / dataset.size();
-    benchOutput.push_back("num_queries=" + std::to_string(query_runs * dataset.size()));
-
     // model
-    dispatchAllModelsRecurse(datasetName, dataset, benchOutput, query_runs, rootDir);
+    dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
 }
 
 
-void dispatchDataSet() {
+void dispatchDataSet(std::vector<std::string> benchOutput) {
     if (dataSetInput == ALL) {
         for (const auto &entry: std::filesystem::directory_iterator(rootDir)) {
             std::string p = entry.path().filename().string();
             if (p.ends_with("y.lrbin")) {
-                dispatchModel(p.substr(0, p.find('_')));
+                dispatchModel(p.substr(0, p.find('_')), benchOutput);
             }
         }
     } else {
-        dispatchModel(dataSetInput);
+        dispatchModel(dataSetInput, benchOutput);
     }
 }
 
@@ -229,14 +253,17 @@ int main(int argc, char *argv[]) {
     tlx::CmdlineParser cmd;
     cmd.add_string('r', "rootDir", rootDir, "Path to the directory containing mdata and models");
     cmd.add_string('d', "datasetPath", dataSetInput, "Name of dataset or all");
-    cmd.add_string('m', "modelPath", modelInput, "Includes all models that have the substring in their filename or all");
+    cmd.add_string('m', "modelPath", modelInput,
+                   "Includes all models that have the substring in their filename or all");
     cmd.add_string('s', "storage", storageInput, "Name of dataset or all");
-    cmd.add_bytes('q', "num_queries_min", queriesMin, "Minimal number of queries");
 
     if (!cmd.process(argc, argv)) {
         cmd.print_usage();
         return EXIT_FAILURE;
     }
-    dispatchDataSet();
+
+    std::vector<std::string> benchOutput;
+    benchOutput.emplace_back("comp=ours");
+    dispatchDataSet(benchOutput);
     return EXIT_SUCCESS;
 }
