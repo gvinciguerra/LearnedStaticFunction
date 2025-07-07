@@ -87,7 +87,7 @@ bemchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, st
         }
     }
     nanos = timer.ElapsedNanos(true);
-    nanosKey = nanos / static_cast<double>(TOT_QUERIES * dataset.size());
+    nanosKey = nanos / static_cast<double>(TOT_QUERIES);
     std::cout << "Total query time: " << nanos << " ns (" << nanosKey << " ns/query)\n";
     benchOutput.push_back("query_nanos=" + std::to_string(nanosKey));
 
@@ -227,7 +227,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         entropy -= p * log(p);
     }
     benchOutput.push_back("entropy=" + std::to_string(entropy));
-    benchOutput.push_back("examples=" + std::to_string(dataset.size()));
+    benchOutput.push_back("size=" + std::to_string(dataset.size()));
     benchOutput.push_back("features=" + std::to_string(dataset.features_count()));
     benchOutput.push_back("classes=" + std::to_string(dataset.classes_count()));
 
@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
     tlx::CmdlineParser cmd;
     cmd.add_string('r', "rootDir", rootDir, "Path to the directory containing mdata and models");
     cmd.add_string('d', "datasetPath", dataSetInput, "Name of dataset or all");
-    cmd.add_string('m', "modelPath", modelInput,
+    cmd.add_string('m', "model", modelInput,
                    "Includes all models that have the substring in their filename or all");
     cmd.add_string('s', "storage", storageInput, "Name of dataset or all");
 
