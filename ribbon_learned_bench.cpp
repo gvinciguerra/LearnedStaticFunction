@@ -11,6 +11,7 @@
 #include "rocksdb/stop_watch.h"
 
 #include "learnedretrieval/learned_static_function.hpp"
+#include "learnedretrieval/model_gauss.hpp"
 
 #define QUERIES 10000000
 #define REPEATS 3
@@ -22,7 +23,6 @@ std::string modelInput = ALL;
 std::string dataSetInput = ALL;
 std::string storageInput = ALL;
 
-typedef lsf::ModelWrapper Model;
 
 void printResult(const std::vector<std::string> &benchOutput) {
     std::cout << std::endl << "RESULT ";
@@ -200,23 +200,11 @@ dispatchBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> b
 
 template<typename Model>
 void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
-                     std::vector<std::string> benchOutput, std::string modelName,
-                     std::filesystem::path modelPath) {
+                     std::vector<std::string> benchOutput, std::string modelName) {
     std::cout << "### Next model: " << modelName << std::endl;
 
 
     // model
-    auto evalFile = modelPath.string() + "_eval.txt";
-    std::ifstream evalStream;
-    evalStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-    evalStream.open(evalFile);
-    std::string line;
-    std::getline(evalStream, line);
-    std::istringstream iss(line);
-    std::string token;
-    while (iss >> token)
-        benchOutput.push_back(token);
-
     benchOutput.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
     benchOutput.push_back("model_name=" + modelName);
     double entropy = 0;
@@ -270,7 +258,7 @@ void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
 }
 
 void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryDatasetReader &dataset,
-                              std::vector<std::string> benchOutput, std::string dir) {
+                              const std::vector<std::string> &benchOutput, const std::string &dir) {
     for (const auto &entry: std::filesystem::directory_iterator(dir)) {
         if (entry.is_directory()) {
             dispatchAllModelsRecurse(datasetName, dataset, benchOutput,
@@ -281,8 +269,19 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryD
             if (fileName.starts_with(datasetName) and fileName.ends_with(".tflite") and
                 (modelInput == ALL or fileName.contains(modelInput))) {
                 try {
-                    Model model(p);
-                    dispatchStorage<Model>(dataset, model, benchOutput, fileName, p);
+                    lsf::ModelWrapper model(p);
+                    auto evalFile = p.string() + "_eval.txt";
+                    std::ifstream evalStream;
+                    evalStream.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+                    evalStream.open(evalFile);
+                    std::string line;
+                    std::getline(evalStream, line);
+                    std::istringstream iss(line);
+                    std::string token;
+                    std::vector benchOutputCopy = benchOutput;
+                    while (iss >> token)
+                        benchOutputCopy.push_back(token);
+                    dispatchStorage<lsf::ModelWrapper>(dataset, model, benchOutputCopy, fileName);
                 } catch (std::runtime_error &e) {
                     std::cerr << "Skipping model " << fileName << " because of " << e.what() << std::endl;
                 }
@@ -319,8 +318,15 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
     if (storageInput == ALL or storageInput == "BuRR") {
         dispatchBuRR(dataset, benchOutput);
     }
+
     // model
-    dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
+    if (datasetName.starts_with("gauss")) {
+        char num = datasetName.back();
+        lsf::ModelGauss model(0.25f * float(num + 1), 8);
+        dispatchStorage<lsf::ModelGauss>(dataset, model, benchOutput, "gauss");
+    } else {
+        dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
+    }
 }
 
 
