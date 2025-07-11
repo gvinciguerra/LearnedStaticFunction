@@ -4,8 +4,10 @@
 #include "learnedretrieval/dataset_reader.hpp"
 #include "learnedretrieval/model_wrapper.hpp"
 
-namespace learnedretrieval {
+namespace lsf {
 
+
+    constexpr float slotsPerItem = 0.95;
     struct BuRRConfig
             : public ribbon::RConfig<64, 1, ribbon::ThreshMode::onebit, false, true, false, 0, uint64_t> {
         static constexpr bool kUseVLR = true;
@@ -13,14 +15,13 @@ namespace learnedretrieval {
 
 
     template<typename Coding>
-    class FilteredRetrievalStorage {
-        ribbon::ribbon_filter<4, BuRRConfig> correctionVLR;
-        ribbon::ribbon_filter<4, BuRRConfig> filterVLR;
+    class FilteredLSFStorage {
+        ribbon::ribbon_filter<4, BuRRConfig> correctionVLSF;
+        ribbon::ribbon_filter<4, BuRRConfig> filterVLSF;
         Coding coder;
     public:
-        double entropy;
 
-        FilteredRetrievalStorage() : coder(0) {}
+        FilteredLSFStorage() : coder(0) {}
 
         template<typename F>
         void build(size_t n, size_t classes_count, F get) {
@@ -43,15 +44,15 @@ namespace learnedretrieval {
                 filter_bits += filterLength;
             }
 
-            filterVLR = ribbon_filter<4, BuRRConfig>(0.90625, 42, maxlenfilter);
-            filterVLR.AddRange(inputFilter.get(), inputFilter.get() + n, true);
-            filterVLR.BackSubst();
+            filterVLSF = ribbon_filter<4, BuRRConfig>(slotsPerItem, 42, maxlenfilter);
+            filterVLSF.AddRange(inputFilter.get(), inputFilter.get() + n, true);
+            filterVLSF.BackSubst();
 
             size_t maxlen = 0;
             auto input = std::make_unique<std::pair<Key, ResultRowVLR>[]>(n);
             for (size_t i = 0; i < n; ++i) {
                 auto [hash, label, probabilities] = get(i);
-                uint64_t filterVal = filterVLR.QueryRetrieval(hash);
+                uint64_t filterVal = filterVLSF.QueryRetrieval(hash);
                 auto [code, length] = coder.encode_once_corrected_code(probabilities, label, filterVal);
                 input[i].first = hash;
                 if (length > maxlen)
@@ -64,9 +65,9 @@ namespace learnedretrieval {
             std::cout << "Preprocessing time (including filter): " << nanos << " ns ("
                       << (nanos / static_cast<double>(n)) << " ns/item)\n";
 
-            correctionVLR = ribbon_filter<4, BuRRConfig>(0.90625, 144, maxlen);
-            correctionVLR.AddRange(input.get(), input.get() + n);
-            correctionVLR.BackSubst();
+            correctionVLSF = ribbon_filter<4, BuRRConfig>(slotsPerItem, 42, maxlen);
+            correctionVLSF.AddRange(input.get(), input.get() + n);
+            correctionVLSF.BackSubst();
 
             auto nanos2 = timer.ElapsedNanos(true);
             std::cout << "Ribbon construction time: " << nanos2 << " ns (" << (nanos2 / static_cast<double>(n))
@@ -78,8 +79,8 @@ namespace learnedretrieval {
 
             std::cout << "Max length correction: " << maxlen << "\n";
             std::cout << "Max length filter: " << maxlenfilter << "\n";
-            const size_t bytesFilter = filterVLR.Size();
-            const size_t bytes = correctionVLR.Size();
+            const size_t bytesFilter = filterVLSF.Size();
+            const size_t bytes = correctionVLSF.Size();
             const size_t bytesTotal = bytes + bytesFilter;
             std::cout << "Ribbon size: " << (bytes * 8) << " bits\n";
             std::cout << "Filter size: " << (bytesFilter * 8) << " bits\n";
@@ -91,8 +92,8 @@ namespace learnedretrieval {
         }
 
         std::pair<uint64_t, uint64_t> query_storage(uint64_t hash) {
-            uint64_t corrected_code = correctionVLR.QueryRetrieval(hash);
-            uint64_t filterCode = filterVLR.QueryRetrieval(hash);
+            uint64_t corrected_code = correctionVLSF.QueryRetrieval(hash);
+            uint64_t filterCode = filterVLSF.QueryRetrieval(hash);
             return {corrected_code, filterCode};
         }
 
@@ -102,7 +103,7 @@ namespace learnedretrieval {
         }
 
         size_t size_in_bytes() const {
-            return filterVLR.Size() + correctionVLR.Size();
+            return filterVLSF.Size() + correctionVLSF.Size();
         }
 
 
@@ -112,14 +113,14 @@ namespace learnedretrieval {
     };
 
     template<typename Model, typename Storage>
-    class LearnedRetrieval {
+    class LearnedStaticFunction {
         XXH3_state_t *state;
         Model &model;
         Storage storage;
 
     public:
 
-        LearnedRetrieval(const learnedretrieval::BinaryDatasetReader &dataset, Model &model) : model(model) {
+        LearnedStaticFunction(const lsf::BinaryDatasetReader &dataset, Model &model) : model(model) {
             state = XXH3_createState();
             assert(state);
             storage = Storage();
@@ -148,8 +149,6 @@ namespace learnedretrieval {
             return storage.query(hash(key, features), query_probabilities(features));
         }
 
-        double get_entropy() const { return storage.entropy; }
-
         size_t model_bytes() const { return model.model_bytes(); }
 
         size_t storage_bytes() const { return storage.size_in_bytes(); }
@@ -159,7 +158,7 @@ namespace learnedretrieval {
     private:
 
         uint64_t hash(uint64_t key, std::span<const float> features) {
-            XXH3_64bits_reset_withSeed(state, 500);
+            XXH3_64bits_reset(state);
             XXH3_64bits_update(state, &key, sizeof(size_t));
             //XXH3_64bits_update(state, features.data(), features.size_bytes());
             return XXH3_64bits_digest(state);

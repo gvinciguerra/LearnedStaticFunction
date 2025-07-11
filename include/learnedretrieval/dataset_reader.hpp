@@ -6,7 +6,7 @@
 #include <span>
 #include <vector>
 
-namespace learnedretrieval {
+namespace lsf {
 class BinaryDatasetReader {
     using label_type = uint16_t;
     std::vector<label_type> labels;

@@ -10,7 +10,7 @@
 #include "serialization.hpp"
 #include "rocksdb/stop_watch.h"
 
-#include "learnedretrieval/learned_retrieval.hpp"
+#include "learnedretrieval/learned_static_function.hpp"
 
 #define QUERIES 10000000
 #define REPEATS 3
@@ -22,7 +22,7 @@ std::string modelInput = ALL;
 std::string dataSetInput = ALL;
 std::string storageInput = ALL;
 
-typedef learnedretrieval::ModelWrapper Model;
+typedef lsf::ModelWrapper Model;
 
 void printResult(const std::vector<std::string> &benchOutput) {
     std::cout << std::endl << "RESULT ";
@@ -34,12 +34,12 @@ void printResult(const std::vector<std::string> &benchOutput) {
 
 
 template<typename S, typename F>
-class FilteredFano50 : public learnedretrieval::Filter50PercentWrapper<learnedretrieval::FilterFanoCoder, S, F> {
+class FilteredFano50 : public lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, S, F> {
 };
 
 template<typename Storage, typename Model>
 void
-benchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput) {
+benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput) {
 
     std::cout << "### Next storage: " << Storage::get_name() << std::endl;
 
@@ -47,14 +47,14 @@ benchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, st
     benchOutput.push_back("storage_name=" + Storage::get_name());
     rocksdb::StopWatchNano timer(true);
 
-    learnedretrieval::LearnedRetrieval<Model, Storage> lr(dataset, model);
+    lsf::LearnedStaticFunction<Model, Storage> lr(dataset, model);
 
     auto nanos = timer.ElapsedNanos(true);
     std::cout << "Total Construct " << nanos << " ns ("
               << (nanos / static_cast<double>(dataset.size())) << " ns/key)\n";
 
     benchOutput.push_back("construct_ms=" + std::to_string(double(nanos) / 1000.0 / 1000.0));
-    benchOutput.push_back("storage_bits=" + std::to_string(8.0 * lr.size_in_bytes() / double(dataset.size())));
+    benchOutput.push_back("storage_bits=" + std::to_string(8.0 * lr.storage_bytes() / double(dataset.size())));
     volatile uint64_t sum = 0;
 
     std::vector<uint32_t> queries(QUERIES);
@@ -111,7 +111,7 @@ benchmark(const learnedretrieval::BinaryDatasetReader &dataset, Model &model, st
 
 
 template<size_t r>
-void benchmarkBuRR(const learnedretrieval::BinaryDatasetReader &dataset, std::vector<std::string> benchOutput) {
+void benchmarkBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> benchOutput) {
 
     std::cout << "### Next storage: BuRR" << std::endl;
 
@@ -149,7 +149,6 @@ void benchmarkBuRR(const learnedretrieval::BinaryDatasetReader &dataset, std::ve
     auto start = std::chrono::high_resolution_clock::now();
     for (auto repeat = 0; repeat < REPEATS; ++repeat) {
         for (auto i: queries) {
-            auto example = dataset.get_example(i);
             uint64_t res = retrievalDs.QueryRetrieval(i);
             sum += res;
         }
@@ -186,7 +185,7 @@ static inline uint64_t lg_up(uint64_t x) {
 
 template<size_t r = 1>
 void
-dispatchBuRR(const learnedretrieval::BinaryDatasetReader &dataset, std::vector<std::string> benchOutput) {
+dispatchBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> benchOutput) {
     size_t target = lg_up(dataset.classes_count());
     if (target == r) {
         benchmarkBuRR<r>(dataset, benchOutput);
@@ -199,14 +198,8 @@ dispatchBuRR(const learnedretrieval::BinaryDatasetReader &dataset, std::vector<s
     }
 }
 
-
-std::string extraxt(std::string name, std::string prefix) {
-    std::string suffix = name.substr(name.find(prefix) + 1, name.length());
-    return suffix.substr(0, suffix.find('_'));
-}
-
 template<typename Model>
-void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model &model,
+void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
                      std::vector<std::string> benchOutput, std::string modelName,
                      std::filesystem::path modelPath) {
     std::cout << "### Next model: " << modelName << std::endl;
@@ -224,10 +217,8 @@ void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model
     while (iss >> token)
         benchOutput.push_back(token);
 
-    benchOutput.push_back("model_bits=" + std::to_string(8 * model.model_bytes()));
+    benchOutput.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
     benchOutput.push_back("model_name=" + modelName);
-    benchOutput.push_back("model_l=" + extraxt(modelName, "_L"));
-    benchOutput.push_back("model_h=" + extraxt(modelName, "_H"));
     double entropy = 0;
     const float min_prob = std::pow(2.f, -31.f);
     for (int i = 0; i < dataset.size(); ++i) {
@@ -271,14 +262,14 @@ void dispatchStorage(const learnedretrieval::BinaryDatasetReader &dataset, Model
                 dataset, model, benchOutput);
     }*/
     if (allStorage or storageInput == "filter_fano50") {
-        benchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::BitWiseFilterCoding<FilteredFano50>>, Model>(
+        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model>(
                 dataset,
                 model,
                 benchOutput);
     }
 }
 
-void dispatchAllModelsRecurse(const std::string &datasetName, const learnedretrieval::BinaryDatasetReader &dataset,
+void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryDatasetReader &dataset,
                               std::vector<std::string> benchOutput, std::string dir) {
     for (const auto &entry: std::filesystem::directory_iterator(dir)) {
         if (entry.is_directory()) {
@@ -305,7 +296,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
     // dataset
     std::cout << "### Next dataset: " << datasetName << std::endl;
     benchOutput.push_back("dataset_name=" + datasetName);
-    learnedretrieval::BinaryDatasetReader dataset(rootDir + datasetName);
+    lsf::BinaryDatasetReader dataset(rootDir + datasetName);
 
     std::vector<size_t> cnt;
     cnt.resize(dataset.classes_count());
@@ -316,7 +307,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
     double entropy = 0;
     for (size_t c: cnt) {
         double p = double(c) / sum;
-        entropy -= p * log(p);
+        entropy -= p * std::log2(p);
     }
     benchOutput.push_back("entropy=" + std::to_string(entropy));
     benchOutput.push_back("size=" + std::to_string(dataset.size()));

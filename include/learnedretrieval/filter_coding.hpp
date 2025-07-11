@@ -20,8 +20,9 @@
  */
 
 
-namespace learnedretrieval {
+namespace lsf {
     constexpr float EPS=0.0000001f;
+    static constexpr size_t COMMON_FILTER_LIMIT = 12;
 
 
     struct FilterCode {
@@ -49,11 +50,11 @@ namespace learnedretrieval {
 
 
     class FilterLengthStrategyOpt {
-        static constexpr int MAX_FILTER_BITS = 20;
+        static constexpr int MAX_FILTER_BITS = COMMON_FILTER_LIMIT;
         static constexpr double PROBABILITY_THRESHOLDS[MAX_FILTER_BITS] = {0.333333, 0.2, 0.111111, 0.0588235, 0.030303,
                                                                            0.0153846, 0.00775194, 0.00389105,
                                                                            0.00194932, 0.00097561, 0.000488043,
-                                                                           0.000244081, 0.000122055, 6.10314e-05,
+                                                                           0.000244081, /*0.000122055, 6.10314e-05,
                                                                            3.05166e-05, 1.52586e-05, 7.62934e-06, 3.81468e-06, 1.90734e-06, 9.53673e-07, /*4.76837e-07, 2.38419e-07, 1.19209e-07, 5.96046e-08, 2.98023e-08, 1.49012e-08, 7.45058e-09, 3.72529e-09, 1.86265e-09, 9.31323e-10, */};
 
 
@@ -91,7 +92,7 @@ namespace learnedretrieval {
         Frequency lastCumFreq;
         size_t currentBitPos;
 
-        static constexpr int BUCKETS = 15;
+        static constexpr int BUCKETS = 10;
         std::array<size_t, BUCKETS> bucketCnt;
 
         Elem target;
@@ -414,7 +415,7 @@ namespace learnedretrieval {
         }
     };
 
-    template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = 15>
+    template<template<typename S, typename F> typename Coder, typename FilterLengthStrategy = FilterLengthStrategyOpt, typename Symbol = uint32_t, typename Frequency = float, size_t MAX_FILTER_CODE_LENGTH = COMMON_FILTER_LIMIT>
     class BitWiseFilterCoding {
         Coder<Symbol, Frequency> coder;
 

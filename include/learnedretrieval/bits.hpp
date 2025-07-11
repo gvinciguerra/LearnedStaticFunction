@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <cassert>
 
-namespace learnedretrieval::bits {
+namespace lsf::bits {
 
 const uint64_t lo_set[] = {
     0x0000000000000000ULL,

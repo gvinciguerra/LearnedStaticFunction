@@ -5,7 +5,7 @@
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model_builder.h"
 
-namespace learnedretrieval {
+namespace lsf {
 
 class ModelWrapper {
     std::unique_ptr<tflite::FlatBufferModel> model;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22...4.0)
-project(LearnedRetrieval)
+project(LearnedStaticFunction)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
@@ -40,15 +40,15 @@ target_link_libraries(RibbonVLR INTERFACE RibbonSorter)
 
 ####################### Library Setup #######################
 
-add_library(LearnedRetrieval INTERFACE)
-target_include_directories(LearnedRetrieval INTERFACE include)
-target_compile_features(LearnedRetrieval INTERFACE cxx_std_23)
-target_link_libraries(LearnedRetrieval INTERFACE RibbonVLR tensorflow-lite)
+add_library(LearnedStaticFunction INTERFACE)
+target_include_directories(LearnedStaticFunction INTERFACE include)
+target_compile_features(LearnedStaticFunction INTERFACE cxx_std_23)
+target_link_libraries(LearnedStaticFunction INTERFACE RibbonVLR tensorflow-lite)
 
 ####################### Benchmark Targets #######################
 if(PROJECT_IS_TOP_LEVEL)
     add_executable(ribbon_learned_filter ribbon_learned_bench.cpp)
-    target_link_libraries(ribbon_learned_filter PUBLIC LearnedRetrieval tlx)
+    target_link_libraries(ribbon_learned_filter PUBLIC LearnedStaticFunction tlx)
 
     add_executable(filter_tuner filter_tuner.cpp)
 endif()
