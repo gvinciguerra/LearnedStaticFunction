@@ -33,7 +33,7 @@ namespace lsf {
 
         size_t model_bytes() const { return sizeof(Parameters) * parameters.size(); }
 
-        size_t model_params_count() const { return parameters.size(); }
+        size_t model_params_count() const { return 2 * parameters.size(); }
 
         float eval_accuracy(const std::vector<float> &testX, const std::vector<uint16_t> &testY) {
             size_t correct = 0;
