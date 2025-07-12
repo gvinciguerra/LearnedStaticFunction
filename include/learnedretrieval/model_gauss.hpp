@@ -17,21 +17,34 @@ namespace lsf {
         std::vector<float> output;
     public:
 
-        ModelGaussianNaiveBayes(BinaryDatasetReader &dataset) {
-            if (dataset.features_count() != 1)
-                throw std::runtime_error("This implementation only supports single feature datasets");
-            std::vector<RunningStats> stats(dataset.classes_count());
-            for (size_t i = 0; i < dataset.size(); ++i)
-                stats[dataset.get_label(i)].push(dataset.get_example(i)[0]);
-            output.resize(dataset.classes_count());
-            parameters.resize(dataset.classes_count());
-            for (size_t i = 0; i < dataset.classes_count(); ++i) {
+        ModelGaussianNaiveBayes(const std::vector<float> &trainX,
+                                const std::vector<uint16_t> &trainY,
+                                size_t classes_count) {
+            std::vector<RunningStats> stats(classes_count);
+            for (size_t i = 0; i < trainX.size(); ++i)
+                stats[trainY[i]].push(trainX[i]);
+            output.resize(classes_count);
+            parameters.resize(classes_count);
+            for (size_t i = 0; i < classes_count; ++i) {
                 parameters[i].mean = stats[i].mean();
                 parameters[i].std = stats[i].standard_deviation();
             }
         }
 
         size_t model_bytes() const { return sizeof(Parameters) * parameters.size(); }
+
+        size_t model_params_count() const { return parameters.size(); }
+
+        float eval_accuracy(const std::vector<float> &testX, const std::vector<uint16_t> &testY) {
+            size_t correct = 0;
+            for (size_t i = 0; i < testX.size(); ++i) {
+                auto output = invoke(std::span<const float>(&testX[i], 1));
+                auto max_it = std::max_element(output.begin(), output.end());
+                if (std::distance(output.begin(), max_it) == testY[i])
+                    correct++;
+            }
+            return static_cast<float>(correct) / testX.size();
+        }
 
         std::span<float> invoke(std::span<const float> example) {
             float sum = 0.0f;

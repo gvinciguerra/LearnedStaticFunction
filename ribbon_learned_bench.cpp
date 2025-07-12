@@ -321,7 +321,33 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
 
     // model
     if (datasetName.starts_with("gauss")) {
-        lsf::ModelGaussianNaiveBayes model(dataset);
+        std::vector<uint32_t> indexes(dataset.size());
+        std::iota(indexes.begin(), indexes.end(), 0);
+        std::shuffle(indexes.begin(), indexes.end(), std::mt19937(42));
+        auto testSize = dataset.size() / 5;
+        std::vector<float> trainX, testX;
+        std::vector<uint16_t> trainY, testY;
+        trainX.reserve(dataset.size() - testSize);
+        trainY.reserve(dataset.size() - testSize);
+        testX.reserve(testSize);
+        testY.reserve(testSize);
+        for (size_t i = 0; i < dataset.size(); ++i) {
+            auto example = dataset.get_example(indexes[i])[0];
+            auto label = dataset.get_label(indexes[i]);
+            if (i < testSize) {
+                testX.push_back(example);
+                testY.push_back(label);
+            } else {
+                trainX.push_back(example);
+                trainY.push_back(label);
+            }
+        }
+        rocksdb::StopWatchNano timer(true);
+        lsf::ModelGaussianNaiveBayes model(trainX, trainY, dataset.classes_count());
+        auto nanos = timer.ElapsedNanos(true);
+        benchOutput.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
+        benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
+        benchOutput.push_back("test_accuracy=" + std::to_string(model.eval_accuracy(testX, testY)));
         dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutput, "gauss");
     } else {
         dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
