@@ -321,9 +321,8 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
 
     // model
     if (datasetName.starts_with("gauss")) {
-        char num = datasetName.back();
-        lsf::ModelGauss model(0.25f * float(num + 1), 8);
-        dispatchStorage<lsf::ModelGauss>(dataset, model, benchOutput, "gauss");
+        lsf::ModelGaussianNaiveBayes model(dataset);
+        dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutput, "gauss");
     } else {
         dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
     }

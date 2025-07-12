@@ -1,49 +1,87 @@
 #pragma once
 
-#include "tensorflow/lite/core/interpreter_builder.h"
-#include "tensorflow/lite/interpreter.h"
-#include "tensorflow/lite/kernels/register.h"
-#include "tensorflow/lite/model_builder.h"
-
-#include <numeric>
 #include <cmath>
+#include <numbers>
+#include "dataset_reader.hpp"
 
 namespace lsf {
 
-    class ModelGauss {
-        static constexpr float start = -1.5;
-        static constexpr float width = 3;
-
-        float invtwosigmasquared;
-        float step;
+    class ModelGaussianNaiveBayes {
+        static constexpr float sqrt_2pi = std::sqrt(std::numbers::pi_v<float> * 2.0f);
+        struct Parameters {
+            float mean;
+            float std;
+        };
+        std::vector<Parameters> parameters;
 
         std::vector<float> output;
     public:
 
-        ModelGauss() = default;
-
-        ModelGauss(double sigma, size_t labels) : invtwosigmasquared(-0.5f / (sigma * sigma)), step(width / (labels-1)) {
-            output.resize(labels);
+        ModelGaussianNaiveBayes(BinaryDatasetReader &dataset) {
+            if (dataset.features_count() != 1)
+                throw std::runtime_error("This implementation only supports single feature datasets");
+            std::vector<RunningStats> stats(dataset.classes_count());
+            for (size_t i = 0; i < dataset.size(); ++i)
+                stats[dataset.get_label(i)].push(dataset.get_example(i)[0]);
+            output.resize(dataset.classes_count());
+            parameters.resize(dataset.classes_count());
+            for (size_t i = 0; i < dataset.classes_count(); ++i) {
+                parameters[i].mean = stats[i].mean();
+                parameters[i].std = stats[i].standard_deviation();
+            }
         }
 
-        size_t model_bytes() const { return sizeof(invtwosigmasquared) + sizeof(output); }
+        size_t model_bytes() const { return sizeof(Parameters) * parameters.size(); }
 
         std::span<float> invoke(std::span<const float> example) {
-            float pos = start;
-            for (auto &v: output) {
-                float delta = example[0] - pos;
-                v = expf(delta * delta * invtwosigmasquared);
-                pos += step;
+            float sum = 0.0f;
+            for (size_t i = 0; i < parameters.size(); ++i) {
+                auto diff = example[0] - parameters[i].mean;
+                auto exponent = -0.5f * (diff * diff) / (parameters[i].std * parameters[i].std);
+                output[i] = std::exp(exponent) / (parameters[i].std * sqrt_2pi);
+                sum += output[i];
             }
-
-            // normalize
-            float sum = std::accumulate(output.begin(), output.end(), 0.0f);
-            sum = 1.0f / sum;
-            for (auto &v: output) {
-                v *= sum;
-            }
+            for (auto &o : output)
+                o /= sum;
             return output;
         }
+
+        class RunningStats {
+            size_t n;
+            double m_oldM;
+            double m_newM;
+            double m_oldS;
+            double m_newS;
+            double m_total;
+            double m_max;
+            double m_min;
+
+        public:
+            RunningStats() : n(0) {}
+
+            void push(double x) {
+                n++;
+                if (n == 1) {
+                    m_oldM = m_newM = x;
+                    m_oldS = 0.0;
+                    m_total = x;
+                    m_max = x;
+                    m_min = x;
+                } else {
+                    m_newM = m_oldM + (x - m_oldM) / n;
+                    m_newS = m_oldS + (x - m_oldM) * (x - m_newM);
+                    m_oldM = m_newM;
+                    m_oldS = m_newS;
+                    m_total += x;
+                }
+            }
+
+            size_t samples() const {  return n;  }
+            double mean() const { return (n > 0) ? m_newM : 0.0; }
+            double variance() const { return ((n > 1) ? m_newS / (n - 1) : 0.0); }
+            double standard_deviation() const { return std::sqrt(variance()); }
+            double total() const { return m_total;  }
+        };
 
     };
 }
