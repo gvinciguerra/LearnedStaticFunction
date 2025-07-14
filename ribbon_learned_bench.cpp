@@ -347,7 +347,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         auto nanos = timer.ElapsedNanos(true);
         benchOutput.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
         benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
-        benchOutput.push_back("test_accuracy=" + std::to_string(model.eval_accuracy(testX, testY)));
+        benchOutput.push_back("test_accuracy=" + std::to_string(100.0f * model.eval_accuracy(testX, testY)));
         dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutput, "gauss");
     } else {
         dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
