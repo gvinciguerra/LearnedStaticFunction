@@ -210,3 +210,4 @@ pyrightconfig.json
 .idea
 cmake-build-*
 /lrdata/
+lsfvenv
