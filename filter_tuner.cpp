@@ -23,6 +23,15 @@ double spaceBinaryFilter(int b, double p) {
     return p + (1 - p) * eps + p * b;
 }
 
+double spaceBinaryFilter0(int b) {
+    return 1 + b;
+}
+
+double spaceBinaryFilter1(int b) {
+    double eps = pow(2.0, -b);
+    return eps;
+}
+
 
 int main(int argc, char *argv[]) {
     std::cout << "{";
@@ -40,9 +49,13 @@ int main(int argc, char *argv[]) {
             b++;
         }
         double spaceOneBit = 1.0;
+        double surprisal0= -log2(p);
+        double surprisal1 = -log2(1.0 - p);
         double spaceEntropy = -p * log2(p) - (1.0 - p) * log2(1.0 - p);
         double spaceOptFilter = p > 0.40938 ? 1.0 : p + p / log(2.0) - p * log2(p / ((1.0 - p) * log(2.0)));
         double spaceBinFilter = spaceBinaryFilter(b, p);
+        double spaceBin0 = spaceBinaryFilter0(b);
+        double spaceBin1 = spaceBinaryFilter1(b);
 
         std::cout << "RESULT method=onebit space=" << spaceOneBit << " overhead="
                   << (spaceOneBit - spaceEntropy) / spaceEntropy << " p=" << p << std::endl;
@@ -52,7 +65,11 @@ int main(int argc, char *argv[]) {
                   << (spaceOptFilter - spaceEntropy) / spaceEntropy << " p=" << p << std::endl;
         std::cout << "RESULT method=binfilter space=" << spaceBinFilter << " overhead="
                   << (spaceBinFilter - spaceEntropy) / spaceEntropy << " p=" << p << std::endl;
+        std::cout << "RESULT method=binfilterunlikely space=" << spaceBin0 << " overhead="
+                  << (spaceBin0 - surprisal0) / surprisal0 << " p=" << p << std::endl;
+        std::cout << "RESULT method=binfilterlikely space=" << spaceBin1 << " overhead="
+                  << (spaceBin1 - surprisal1) / surprisal1 << " p=" << p << std::endl;
 
-        p -= 0.005;
+        p -= 0.001;
     }
 }

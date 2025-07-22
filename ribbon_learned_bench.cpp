@@ -14,7 +14,7 @@
 #include "learnedretrieval/model_gauss.hpp"
 
 #define QUERIES 10000000
-#define REPEATS 3
+#define REPEATS 10
 #define TOT_QUERIES (QUERIES*REPEATS)
 
 std::string rootDir = "lrdata/";
@@ -241,14 +241,14 @@ void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
     // storage
     bool allStorage = storageInput == ALL;
 
-    /*if (allStorage or storageInput == "filter_huf") {
-        benchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::BitWiseFilterCoding<learnedretrieval::FilterHuffmanCoder>>, Model>(
+    if (allStorage or storageInput == "filter_huf") {
+        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model>(
                 dataset, model, benchOutput);
     }
     if (allStorage or storageInput == "filter_fano") {
-        benchmark<learnedretrieval::FilteredRetrievalStorage<learnedretrieval::BitWiseFilterCoding<learnedretrieval::FilterFanoCoder>>, Model>(
+        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterFanoCoder>>, Model>(
                 dataset, model, benchOutput);
-    }*/
+    }
     if (allStorage or storageInput == "filter_fano50") {
         benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model>(
                 dataset,
