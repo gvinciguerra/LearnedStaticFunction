@@ -15,3 +15,8 @@ fi
 source lsfvenv/bin/activate
 python3 -m pip install -r requirements.txt
 python3 train.py
+
+mv processed_data/data_sux4j ../csf/data_sux4j
+mkdir -p ../lrdata
+mv processed_data/* ../lrdata/
+mv models/* ../lrdata/

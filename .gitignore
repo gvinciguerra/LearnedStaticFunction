@@ -210,4 +210,5 @@ pyrightconfig.json
 .idea
 cmake-build-*
 /lrdata/
-lsfvenv
+train/lsfvenv
+csf/data_sux4j
