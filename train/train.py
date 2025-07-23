@@ -223,7 +223,7 @@ def export_tflite(model_path, filename, X_train, X_test, y_test, classes, info):
         print(f"{quantization} quantization bytes: {len(tflite_model)}")
         print(f"{quantization} quantization accuracy: {accuracy}")
 
-        with open(f"{model_path}/{filename}_{quantization}_eval.txt", "w") as f:
+        with open(f"{model_path}/{filename}_{quantization}.tflite_eval.txt", "w") as f:
             f.write(f"model_l={info['model_l']} ")
             f.write(f"model_h={info['model_h']} ")
             f.write(f"quant={quantization} ")
