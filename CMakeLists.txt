@@ -13,8 +13,12 @@ endif()
 ####################### Dependency setup #######################
 
 set(PSIMD_SOURCE_DIR "../../lib/psimd")
-#option(TFLITE_ENABLE_METAL "Enable Metal delegate (iOS only)" ON)
-#option(TFLITE_ENABLE_XNNPACK "Enable XNNPACK backend" OFF)
+
+# Fix compilation issue with conv ops in TensorFlow Lite (which we don't use)
+set(TFLITE_CMAKELISTS "lib/tensorflow/tensorflow/lite/CMakeLists.txt")
+file(READ "${TFLITE_CMAKELISTS}" FILE_CONTENTS)
+string(REPLACE "*_ops_wrapper)" "_ops_wrapper|conv)" FILE_CONTENTS "${FILE_CONTENTS}")
+file(WRITE "${TFLITE_CMAKELISTS}" "${FILE_CONTENTS}")
 add_subdirectory(lib/tensorflow/tensorflow/lite "${CMAKE_CURRENT_BINARY_DIR}/tensorflow-lite" EXCLUDE_FROM_ALL)
 
 if(NOT TARGET tlx)
