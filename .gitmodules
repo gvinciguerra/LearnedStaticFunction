@@ -11,3 +11,6 @@
 [submodule "lib/tlx"]
 	path = lib/tlx
 	url = https://github.com/tlx/tlx.git
+[submodule "lib/psimd"]
+	path = lib/psimd
+	url = https://github.com/Maratyszcza/psimd.git

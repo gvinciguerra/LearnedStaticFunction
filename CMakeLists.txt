@@ -12,6 +12,7 @@ endif()
 
 ####################### Dependency setup #######################
 
+set(PSIMD_SOURCE_DIR "../../lib/psimd")
 #option(TFLITE_ENABLE_METAL "Enable Metal delegate (iOS only)" ON)
 #option(TFLITE_ENABLE_XNNPACK "Enable XNNPACK backend" OFF)
 add_subdirectory(lib/tensorflow/tensorflow/lite "${CMAKE_CURRENT_BINARY_DIR}/tensorflow-lite" EXCLUDE_FROM_ALL)
