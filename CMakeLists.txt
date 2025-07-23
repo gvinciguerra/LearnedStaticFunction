@@ -40,6 +40,7 @@ target_compile_features(RibbonVLR INTERFACE cxx_std_20)
 target_include_directories(RibbonVLR INTERFACE lib/burr-vl)
 target_include_directories(RibbonVLR INTERFACE lib/burr-vl/ips2ra/include)
 target_include_directories(RibbonVLR INTERFACE lib/burr-vl/DySECT)
+target_include_directories(RibbonVLR INTERFACE lib/burr-vl/DySECT/module/xxhash)
 target_include_directories(RibbonVLR INTERFACE lib/sort/include)
 target_link_libraries(RibbonVLR INTERFACE RibbonSorter)
 
