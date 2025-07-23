@@ -47,8 +47,11 @@ target_link_libraries(LearnedStaticFunction INTERFACE RibbonVLR tensorflow-lite)
 
 ####################### Benchmark Targets #######################
 if(PROJECT_IS_TOP_LEVEL)
-    add_executable(ribbon_learned_filter ribbon_learned_bench.cpp)
-    target_link_libraries(ribbon_learned_filter PUBLIC LearnedStaticFunction tlx)
+    add_executable(ribbon_learned_bench ribbon_learned_bench.cpp)
+    target_link_libraries(ribbon_learned_bench PUBLIC LearnedStaticFunction tlx)
+
+    add_executable(plot_model_calibration plot_model_calibration.cpp)
+    target_link_libraries(plot_model_calibration PUBLIC LearnedStaticFunction tlx)
 
     add_executable(filter_tuner filter_tuner.cpp)
 endif()

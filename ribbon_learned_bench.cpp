@@ -199,8 +199,8 @@ dispatchBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> b
 }
 
 template<typename Model>
-void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
-                     std::vector<std::string> benchOutput, std::string modelName) {
+void determineCalibration(const lsf::BinaryDatasetReader &dataset, Model &model,
+                          std::vector<std::string> benchOutput, std::string modelName) {
     std::cout << "### Next model: " << modelName << std::endl;
 
 
@@ -281,7 +281,7 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryD
                     std::vector benchOutputCopy = benchOutput;
                     while (iss >> token)
                         benchOutputCopy.push_back(token);
-                    dispatchStorage<lsf::ModelWrapper>(dataset, model, benchOutputCopy, fileName);
+                    determineCalibration<lsf::ModelWrapper>(dataset, model, benchOutputCopy, fileName);
                 } catch (std::runtime_error &e) {
                     std::cerr << "Skipping model " << fileName << " because of " << e.what() << std::endl;
                 }
@@ -348,7 +348,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         benchOutput.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
         benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
         benchOutput.push_back("test_accuracy=" + std::to_string(100.0f * model.eval_accuracy(testX, testY)));
-        dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutput, "gauss");
+        determineCalibration<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutput, "gauss");
     } else {
         dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
     }

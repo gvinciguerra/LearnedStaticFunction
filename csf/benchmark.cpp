@@ -123,6 +123,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Results sum: " << sum << std::endl;
     std::cout << "Time: " << duration / (queries.size() * REPEATS)  << " ns/query" << std::endl;
     std::cout << "Hash time: " << duration_hash / (queries.size() * REPEATS)  << " ns/query" << std::endl;
+    std::cout << "Size: " << inputs.size() << std::endl;
 
     return 0;
 }
