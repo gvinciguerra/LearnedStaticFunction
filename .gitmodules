@@ -6,8 +6,8 @@
 	url = https://github.com/boostorg/sort
 [submodule "lib/burr-vl"]
 	path = lib/burr-vl
-	url = https://github.com/lorenzhs/BuRR.git
-	branch = variable-bitlength
+	url = https://github.com/stefanfred/BuRR.git
+	branch = falsepositiveVLR
 [submodule "lib/tlx"]
 	path = lib/tlx
 	url = https://github.com/tlx/tlx.git
