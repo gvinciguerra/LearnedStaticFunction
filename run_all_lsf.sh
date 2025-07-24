@@ -3,6 +3,6 @@
 mkdir "out"
 (cd out && cmake -DCMAKE_BUILD_TYPE=Release ..)
 (cd out && make)
-(./out/plot_model_calibration > calibration.txt)
-(./out/filter_tuner > filter.txt)
-(./out/ribbon_learned_bench > bench.txt)
+#(cd out && ./plot_model_calibration > calibration.txt)
+#(cd out && ./filter_tuner > filter.txt)
+(cd out && ./ribbon_learned_bench > bench.txt)

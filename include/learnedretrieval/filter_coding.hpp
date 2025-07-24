@@ -231,12 +231,6 @@ namespace lsf {
             size_t index;
             bool leaf;
         };
-        std::vector<Node> tree;
-        Node root;
-        Node currentDecodingNode;
-
-        uint64_t encodeCode;
-        bool lastEncBit;
 
         class Compare {
         public:
@@ -245,15 +239,23 @@ namespace lsf {
                 //return a.index > b.index;
             }
         };
+        std::vector<Node> tree;
+        std::priority_queue<Node, std::vector<Node>, Compare> nodes;
+        Node root;
+        Node currentDecodingNode;
+
+        uint64_t encodeCode;
+        bool lastEncBit;
+
 
         FilterHuffmanCoder(size_t) {}
 
 
         template<bool encode = false>
         void init(const std::span<Frequency> &f, Symbol s = -1) {
-            std::priority_queue<Node, std::vector<Node>, Compare> nodes;
+            tree.clear();
             for (Symbol i = 0; i < f.size(); ++i) {
-                Node n{i, 0, 0, 0, 0, f[i], 0, i, true};
+                Node n{i, 0, 0, 0, 0, std::max(Frequency(pow(2.0,-10.0)), f[i]), 0, i, true};
                 nodes.push(n);
                 tree.push_back(n);
             }
@@ -289,6 +291,7 @@ namespace lsf {
                 nodes.push(parent);
             }
             root = nodes.top();
+            nodes.pop();
             currentDecodingNode = root;
 
             if constexpr (encode) {
