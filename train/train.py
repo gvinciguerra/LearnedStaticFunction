@@ -137,6 +137,7 @@ def train(model_path, dataset_name, X_train, y_train, classes, num_layers, hidde
         monitor=monitor,
         verbose=1,
         patience=10,
+        min_delta=0.00001,
         restore_best_weights=True,
     )
 
@@ -220,7 +221,7 @@ def export_tflite(model_path, filename, X_train, X_test, y_test, classes, info):
             tflite_y = np.array([1 - tflite_y, tflite_y]).T
         accuracy = keras.metrics.sparse_categorical_accuracy(y_test, tflite_y).numpy().mean()
         top3accuracy = keras.metrics.sparse_top_k_categorical_accuracy(y_test, tflite_y, k=3).numpy().mean()
-        print(f"{quantization} quantization bytes: {len(tflite_model)}")
+        print(f"{quantization} quantization file bytes: {len(tflite_model)}")
         print(f"{quantization} quantization accuracy: {accuracy}")
 
         with open(f"{model_path}/{filename}_{quantization}.tflite_eval.txt", "w") as f:

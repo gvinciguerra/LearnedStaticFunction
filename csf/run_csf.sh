@@ -3,11 +3,11 @@
 datasets=("songs" "nids" "covertype" "urls" "gaussian0" "gaussian1" "gaussian2" "gaussian3")
 structures=("3" "4")
 
-mkdir out
-rm /out/*.csf*
+cd Sux4J
+rm -f /out/*.csf*
 
 for s in "${structures[@]}"; do
-    rm /out/bench${s}.txt
+    rm -f /out/bench${s}.txt
     for d in "${datasets[@]}"; do
         echo "Building $d $s"
         java -cp sux4j-5.4.1.jar:jars/runtime/* it.unimi.dsi.sux4j.mph.GV${s}CompressedFunction -b --values /data_sux4j/${d}_y.sux4j ${d}.csf${s} /data_sux4j/${d}_X.sux4j | tee ${d}.csf${s}-construct.txt
