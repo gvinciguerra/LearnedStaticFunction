@@ -8,6 +8,7 @@
 #include <queue>
 #include <functional>
 #include <iostream>
+#include <span>
 #include "bits.hpp"
 
 /*

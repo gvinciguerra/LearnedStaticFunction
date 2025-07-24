@@ -18,7 +18,7 @@
 #define TOT_QUERIES (QUERIES*REPEATS)
 
 std::string rootDir = "../lrdata/";
-constexpr std::string ALL = "all";
+std::string ALL = "all";
 std::string modelInput = ALL;
 std::string dataSetInput = ALL;
 std::string storageInput = ALL;

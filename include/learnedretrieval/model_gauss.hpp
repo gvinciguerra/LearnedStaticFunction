@@ -1,13 +1,11 @@
 #pragma once
 
 #include <cmath>
-#include <numbers>
-#include "dataset_reader.hpp"
 
 namespace lsf {
 
     class ModelGaussianNaiveBayes {
-        static constexpr float sqrt_2pi = std::sqrt(std::numbers::pi_v<float> * 2.0f);
+        static constexpr float sqrt_2pi = 2.5066282746f;
         struct Parameters {
             float mean;
             float std;
