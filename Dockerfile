@@ -68,7 +68,7 @@ RUN echo '#!/bin/bash\n\
 set -e\n\
 cd /lsf/train && bash run_train.sh\n\
 cd /lsf/csf && bash run_csf.sh\n\
-cd /lsf\
+cd /lsf\n\
 ./build/plot_model_calibration -r /lrdata/ > /out/calibration.txt\n\
 ./build/filter_tuner > /out/filter.txt\n\
 ./build/ribbon_learned_bench -r /lrdata/ > /out/bench.txt' > entrypoint.sh
