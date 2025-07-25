@@ -8,6 +8,53 @@ import sklearn.datasets
 import sklearn.preprocessing
 import os
 
+import tensorflow as tf
+import numpy as np
+
+class GlobalMinEarlyStopping(tf.keras.callbacks.Callback):
+    def __init__(self, monitor, min_improvement_rel, window):
+        super().__init__()
+        self.monitor = monitor
+        self.min_improvement_rel = min_improvement_rel
+        self.window = window
+        self.losses = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        current_loss = logs.get(self.monitor)
+
+        if current_loss is None:
+            print(f"Warning: Metric '{self.monitor}' is not available.")
+            return
+
+        self.losses.append(current_loss)
+
+
+        if len(self.losses) > self.window:
+            # Global min including all epochs
+            global_min = min(self.losses)
+            # Min excluding last `window` epochs
+            min_excl_recent = min(self.losses[:-self.window])
+            threshold = min_excl_recent * (1 - self.min_improvement_rel)
+            improvement = (min_excl_recent - global_min) / min_excl_recent * 100
+
+            print(
+                f"Epoch {epoch + 1}: "
+                f"{self.monitor} = {current_loss:.5f} | "
+                f"Global min = {global_min:.5f} | "
+                f"Min (excl. last {self.window}) = {min_excl_recent:.5f} | "
+                f"Improvement = {improvement:.2f}%")
+
+            if global_min >= threshold:
+                print(
+                    f"\nStopping training at epoch {epoch+1}: "
+                    f"Global min loss ({global_min:.5f}) is not at least "
+                    f"{self.min_improvement_rel*100:.2f}% better than "
+                    f"min loss before last {self.window} epochs ({min_excl_recent:.5f})."
+                )
+                self.model.stop_training = True
+
+
 def load_dataset(dataset_name):
     if dataset_name == "songs":
         # https://www.kaggle.com/datasets/amitanshjoshi/spotify-1million-tracks/data
@@ -39,7 +86,7 @@ def load_dataset(dataset_name):
         X = full_dataset[url_based_features]
         y = full_dataset["label"]
     elif dataset_name.startswith("gaussian"):
-        classes = 8 
+        classes = 8
         n = 100000000
         distance = 2
         sigma = [0.25, 0.5, 0.75, 1.0][int(dataset_name[-1])]
@@ -95,7 +142,7 @@ def prepare_dataset(dataset_name, X, y, classes):
             byte_data += base64.b85encode(i.to_bytes(4, "big"))
             f.write(byte_data)
             f.write(b"\n")
-    
+
     return X_train, X_test, y_train, y_test
 
 # %% [markdown]
@@ -133,13 +180,13 @@ def train(model_path, dataset_name, X_train, y_train, classes, num_layers, hidde
         output_layer,
     ])
 
-    es = keras.callbacks.EarlyStopping(
-        monitor=monitor,
-        verbose=1,
-        patience=10,
-        min_delta=0.00001,
-        restore_best_weights=True,
-    )
+    #es = keras.callbacks.EarlyStopping(
+    #    monitor=monitor,
+    #    verbose=1,
+    #    patience=10,
+    #    min_delta=0.00001,
+    #    restore_best_weights=True,
+    #)
 
     model.compile(
         loss=loss,
@@ -158,7 +205,7 @@ def train(model_path, dataset_name, X_train, y_train, classes, num_layers, hidde
         batch_size=128,
         verbose=2,
         validation_split=0.1,
-        callbacks=[es],
+        callbacks=[GlobalMinEarlyStopping('loss', 0.01, 3)],
     )
     train_end = time.perf_counter()
     training_seconds = train_end - train_start
@@ -204,7 +251,7 @@ def export_tflite(model_path, filename, X_train, X_test, y_test, classes, info):
             converter.representative_dataset = representative_dataset
         elif quantization == "float16":
             converter.target_spec.supported_types = [tf.float16]
-            
+
         tflite_model = converter.convert()
         with open(f"{model_path}/{filename}_{quantization}.tflite", "wb") as f:
             f.write(tflite_model)
@@ -244,7 +291,7 @@ for dataset_name in ["songs", "covertype", "nids", "urls", "gaussian0", "gaussia
     X_train, X_test, y_train, y_test = prepare_dataset(dataset_name, X, y, classes)
     if dataset_name.startswith("gaussian"):
         continue
-    for num_layers, hidden_units in [(0, 0), (1, 50), (1, 100), (2, 50)]:    
+    for num_layers, hidden_units in [(0, 0), (1, 50), (1, 100), (2, 50)]:
         print(f"Training model with {num_layers} layers and {hidden_units} hidden units on {dataset_name}")
         model_path = f"models/{dataset_name}_models/"
         filename, info = train(model_path, dataset_name, X_train, y_train, classes, num_layers, hidden_units)
