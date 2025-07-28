@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     libc++abi-dev \
     libtbb-dev \
     cmake \
+    texlive-full \
     && apt-get clean
 
 
@@ -63,6 +64,15 @@ RUN mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COM
 RUN cd build && make -j$(nproc)
 
 
+############################ Build sqlplot-tools ############################
+COPY paper /paper
+
+RUN git clone https://github.com/bingmann/sqlplot-tools.git /opt/sqlplot-tools
+RUN mkdir /opt/sqlplot-tools/build
+WORKDIR /opt/sqlplot-tools/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DWITH_POSTGRESQL=OFF -DWITH_MYSQL=OFF ..
+RUN cmake --build . -j 8
+
 ############################ Execute ############################
 RUN echo '#!/bin/bash\n\
 set -e\n\
@@ -71,6 +81,18 @@ cd /lsf/csf && bash run_csf.sh\n\
 cd /lsf\n\
 ./build/plot_model_calibration -r /lrdata/ | tee /out/calibration.txt\n\
 ./build/filter_tuner | tee /out/filter.txt\n\
-./build/ribbon_learned_bench -r /lrdata/ | tee /out/bench.txt' > entrypoint.sh
+./build/ribbon_learned_bench -r /lrdata/ | tee /out/bench.txt\n\
+cd /paper/fig/data\n\
+cp -a /out/. .\n\
+cat bench4.txt >> bench.txt\n\
+for f in $(find . -name "*.tex"); do\n\
+    echo -e "\n\n--- Building $f"\n\
+    /opt/sqlplot-tools/build/src/sqlplot-tools "$f" || exit 1\n\
+done\n\
+cd /paper\n\
+pdflatex main.tex\n\
+pdflatex main.tex\n\
+pdflatex main.tex\n\
+cp main.pdf /out/' > entrypoint.sh
 
 ENTRYPOINT ["/bin/bash", "./entrypoint.sh"]

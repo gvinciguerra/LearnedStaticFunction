@@ -18,7 +18,7 @@ if [ ! -d "lsfvenv" ]; then
 fi
 
 source lsfvenv/bin/activate
-python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt --break-system-packages
 python3 train.py
 
 mv processed_data/data_sux4j/* /data_sux4j
