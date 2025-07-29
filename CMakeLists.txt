@@ -14,6 +14,18 @@ endif()
 
 set(PSIMD_SOURCE_DIR "../../lib/psimd")
 
+set(TF_MAJOR_VERSION 2)
+set(TF_MINOR_VERSION 19)
+set(TF_PATCH_VERSION 0)
+set(TF_VERSION_SUFFIX "")
+
+add_compile_definitions(
+        TF_MAJOR_VERSION=${TF_MAJOR_VERSION}
+        TF_MINOR_VERSION=${TF_MINOR_VERSION}
+        TF_PATCH_VERSION=${TF_PATCH_VERSION}
+        TF_VERSION_SUFFIX="${TF_VERSION_SUFFIX}"
+)
+
 # Fix compilation issue with conv ops in TensorFlow Lite (which we don't use)
 set(TFLITE_CMAKELISTS "lib/tensorflow/tensorflow/lite/CMakeLists.txt")
 file(READ "${TFLITE_CMAKELISTS}" FILE_CONTENTS)

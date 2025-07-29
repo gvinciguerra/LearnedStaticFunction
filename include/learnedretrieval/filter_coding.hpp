@@ -22,11 +22,18 @@
 
 
 namespace lsf {
-    constexpr float EPS=0.0000001f;
+    constexpr float EPS = 0.0000001f;
     static constexpr size_t COMMON_FILTER_LIMIT = 12;
 
 
     struct FilterCode {
+        using LengthType = uint64_t;
+        uint64_t code;
+        LengthType length;
+        LengthType bitsSet;
+    };
+
+    struct CorrectionCode {
         using LengthType = uint64_t;
         uint64_t code;
         LengthType length;
@@ -101,12 +108,12 @@ namespace lsf {
         int getBucket(Frequency f) {
             int exp;
             frexp(f, &exp);
-            if(f==0) [[unlikely]]{
-                return BUCKETS-1;
-            }else if(f==1) [[unlikely]] {
+            if (f == 0) [[unlikely]] {
+                return BUCKETS - 1;
+            } else if (f == 1) [[unlikely]] {
                 return 0;
             }
-            return std::min(BUCKETS-1, -exp);
+            return std::min(BUCKETS - 1, -exp);
         }
 
     public:
@@ -175,7 +182,7 @@ namespace lsf {
             }
             center = index;
             float currentRelFeq = absoluteFreq / lastCumFreq;
-            currentRelFeq= std::max(std::min(currentRelFeq, 1.0f-EPS), EPS);
+            currentRelFeq = std::max(std::min(currentRelFeq, 1.0f - EPS), EPS);
             flipNext = currentRelFeq > 0.5f;
             if (flipNext) {
                 currentRelFeq = 1.0f - currentRelFeq;
@@ -240,6 +247,7 @@ namespace lsf {
                 //return a.index > b.index;
             }
         };
+
         std::vector<Node> tree;
         std::priority_queue<Node, std::vector<Node>, Compare> nodes;
         Node root;
@@ -256,7 +264,7 @@ namespace lsf {
         void init(const std::span<Frequency> &f, Symbol s = -1) {
             tree.clear();
             for (Symbol i = 0; i < f.size(); ++i) {
-                Node n{i, 0, 0, 0, 0, std::max(Frequency(pow(2.0,-10.0)), f[i]), 0, i, true};
+                Node n{i, 0, 0, 0, 0, std::max(Frequency(pow(2.0, -10.0)), f[i]), 0, i, true};
                 nodes.push(n);
                 tree.push_back(n);
             }
@@ -281,12 +289,12 @@ namespace lsf {
                 tree[b.index] = b;
 
                 float relp;
-                if(a.p+b.p==0){
-                    relp=0.5f;
+                if (a.p + b.p == 0) {
+                    relp = 0.5f;
                 } else {
-                    relp=a.p / (a.p + b.p);
+                    relp = a.p / (a.p + b.p);
                 }
-                relp = std::max(std::min(relp, 1.0f-EPS), EPS);
+                relp = std::max(std::min(relp, 1.0f - EPS), EPS);
                 Node parent{0, a.index, b.index, 0, 0, a.p + b.p, relp, tree.size(), false};
                 tree.push_back(parent);
                 nodes.push(parent);
@@ -373,7 +381,7 @@ namespace lsf {
 
         float getRelProbabilityAndAdvance() {
             if (armed) {
-                return std::max(std::min(1.0f-fs[armedSymbol], 1.0f-EPS), EPS);
+                return std::max(std::min(1.0f - fs[armedSymbol], 1.0f - EPS), EPS);
             }
             return coder.getRelProbabilityAndAdvance();
         }
@@ -383,7 +391,7 @@ namespace lsf {
         }
 
         void nextEncodeBit() {
-            if(armed) {
+            if (armed) {
                 exploded = true;
             } else {
                 coder.nextEncodeBit();
@@ -445,15 +453,16 @@ namespace lsf {
          */
         FilterCode encode_once_filter(const std::span<Frequency> &f, Symbol symbol) {
             coder.template init<true>(f, symbol);
-            FilterCode res{0, 0};
+            FilterCode res{0, 0, 0};
             size_t depth = 0;
             while (!coder.hasFinished()) {
-                float r1=coder.getRelProbabilityAndAdvance();
+                float r1 = coder.getRelProbabilityAndAdvance();
                 uint64_t filterBits = getFilterBits(res.length, r1, depth);
                 coder.nextEncodeBit();
                 bool r = coder.getBit();
                 if (!r) {
                     res.code |= ((uint64_t(1) << filterBits) - 1) << res.length;
+                    res.bitsSet += filterBits;
                 }
                 res.length += filterBits;
                 depth++;
@@ -462,10 +471,10 @@ namespace lsf {
         }
 
 
-        FilterCode
+        CorrectionCode
         encode_once_corrected_code(const std::span<Frequency> &f, Symbol symbol, uint64_t filter_code_data) {
             coder.template init<true>(f, symbol);
-            FilterCode res{0, 0};
+            CorrectionCode res{0, 0};
             size_t totalFilterBitLength = 0;
             size_t depth = 0;
             while (!coder.hasFinished()) {

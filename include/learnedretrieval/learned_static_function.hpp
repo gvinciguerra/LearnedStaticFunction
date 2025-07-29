@@ -19,12 +19,15 @@ namespace lsf {
         ribbon::ribbon_filter<4, BuRRConfig> correctionVLSF;
         ribbon::ribbon_filter<4, BuRRConfig> filterVLSF;
         Coding coder;
+
+        size_t statistic_bits_input;
     public:
 
         FilteredLSFStorage() : coder(0) {}
 
         template<typename F>
         void build(size_t n, size_t classes_count, F get) {
+            statistic_bits_input = 0;
             rocksdb::StopWatchNano timer(true);
             size_t huffman_bits = 0;
             size_t filter_bits = 0;
@@ -36,7 +39,8 @@ namespace lsf {
             auto inputFilter = std::make_unique<std::pair<Key, ResultRowVLR>[]>(n);
             for (size_t i = 0; i < n; ++i) {
                 auto [hash, label, probabilities] = get(i);
-                auto [code, filterLength] = coder.encode_once_filter(probabilities, label);
+                auto [code, filterLength, bitsSet] = coder.encode_once_filter(probabilities, label);
+                statistic_bits_input += bitsSet;
                 inputFilter[i].first = hash;
                 if (filterLength > maxlenfilter)
                     maxlenfilter = filterLength;
@@ -54,6 +58,7 @@ namespace lsf {
                 auto [hash, label, probabilities] = get(i);
                 uint64_t filterVal = filterVLSF.QueryRetrieval(hash);
                 auto [code, length] = coder.encode_once_corrected_code(probabilities, label, filterVal);
+                statistic_bits_input += length;
                 input[i].first = hash;
                 if (length > maxlen)
                     maxlen = length;
@@ -106,6 +111,9 @@ namespace lsf {
             return filterVLSF.Size() + correctionVLSF.Size();
         }
 
+        size_t get_statistic_bits_input() const {
+            return statistic_bits_input;
+        }
 
         static const std::string get_name() {
             return "Filtered-" + Coding::get_name();
@@ -154,6 +162,8 @@ namespace lsf {
         size_t storage_bytes() const { return storage.size_in_bytes(); }
 
         size_t size_in_bytes() const { return storage.size_in_bytes() + model.model_bytes(); }
+
+        size_t get_statistic_bits_input() const { return storage.get_statistic_bits_input(); }
 
     private:
 

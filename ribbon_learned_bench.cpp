@@ -22,6 +22,7 @@ std::string ALL = "all";
 std::string modelInput = ALL;
 std::string dataSetInput = ALL;
 std::string storageInput = ALL;
+std::string evalModelInput = ALL;
 
 
 void printResult(const std::vector<std::string> &benchOutput) {
@@ -55,8 +56,10 @@ benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std
 
     benchOutput.push_back("construct_ms=" + std::to_string(double(nanos) / 1000.0 / 1000.0));
     benchOutput.push_back("storage_bits=" + std::to_string(8.0 * lr.storage_bytes() / double(dataset.size())));
+    benchOutput.push_back(
+            "storage_factor=" + std::to_string(double((8.0 * lr.storage_bytes()) / lr.get_statistic_bits_input())));
 
-    if constexpr(doQueries) {
+    if constexpr (doQueries) {
         volatile uint64_t sum = 0;
 
         std::vector<uint32_t> queries(QUERIES);
@@ -66,22 +69,24 @@ benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std
             query = dist(gen);
         }
 
-        timer.Start();
+        double nanosKey;
+        if (false) {
+            timer.Start();
 
-        for (auto repeat = 0; repeat < REPEATS; ++repeat) {
-            for (auto i: queries) {
-                auto example = dataset.get_example(i);
-                auto output = lr.query_probabilities(example);
-                sum += output[0] + lr.query_storage(i, example).first;
+            for (auto repeat = 0; repeat < REPEATS; ++repeat) {
+                for (auto i: queries) {
+                    auto example = dataset.get_example(i);
+                    auto output = lr.query_probabilities(example);
+                    sum += output[0] + lr.query_storage(i, example).first;
+                }
             }
+            nanos = timer.ElapsedNanos(true);
+            nanosKey = nanos / static_cast<double>(TOT_QUERIES);
+            std::cout << "Model inference and retrieval time " << nanos << " ns (" << (nanosKey) << " ns/query)\n";
+            benchOutput.push_back("inf_retrieval_nanos=" + std::to_string(nanosKey));
         }
-        nanos = timer.ElapsedNanos(true);
-        auto nanosKey = nanos / static_cast<double>(TOT_QUERIES);
-        std::cout << "Model inference and retrieval time " << nanos << " ns (" << (nanosKey) << " ns/query)\n";
-        benchOutput.push_back("inf_retrieval_nanos=" + std::to_string(nanosKey));
-        timer.Start();
 
-        auto start = std::chrono::high_resolution_clock::now();
+        timer.Start();
         for (auto repeat = 0; repeat < REPEATS; ++repeat) {
             for (auto i: queries) {
                 auto example = dataset.get_example(i);
@@ -140,6 +145,8 @@ void benchmarkBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::str
 
     benchOutput.push_back("construct_ms=" + std::to_string(double(nanos) / 1000.0 / 1000.0));
     benchOutput.push_back("storage_bits=" + std::to_string(8.0 * retrievalDs.Size() / double(dataset.size())));
+    benchOutput.push_back(
+            "storage_factor=" + std::to_string(double((8.0 * retrievalDs.Size()) / (r * dataset.size()))));
     volatile uint64_t sum = 0;
 
     std::vector<uint32_t> queries(QUERIES);
@@ -205,7 +212,7 @@ dispatchBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> b
 
 template<typename Model>
 void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
-                          std::vector<std::string> benchOutput, std::string modelName) {
+                     std::vector<std::string> benchOutput, std::string modelName) {
     std::cout << "### Next model: " << modelName << std::endl;
 
 
@@ -244,21 +251,25 @@ void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
     benchOutput.push_back("model_inf_ns=" + std::to_string(nanos / static_cast<double>(TOT_QUERIES)));
 
     // storage
-    bool allStorage = storageInput == ALL;
+    if (modelName == "gauss" or evalModelInput == ALL or modelName.contains(evalModelInput)) {
+        bool allStorage = storageInput == ALL;
 
-    if (allStorage or storageInput == "filter_huf") {
-        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model, false>(
-                dataset, model, benchOutput);
-    }
-    if (allStorage or storageInput == "filter_fano") {
-        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterFanoCoder>>, Model, true>(
-                dataset, model, benchOutput);
-    }
-    if (allStorage or storageInput == "filter_fano50") {
-        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model, true>(
-                dataset,
-                model,
-                benchOutput);
+        if (allStorage or storageInput == "filter_huf") {
+            benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model, false>(
+                    dataset, model, benchOutput);
+        }
+        if (allStorage or storageInput == "filter_fano") {
+            benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterFanoCoder>>, Model, true>(
+                    dataset, model, benchOutput);
+        }
+        if (allStorage or storageInput == "filter_fano50") {
+            benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model, true>(
+                    dataset,
+                    model,
+                    benchOutput);
+        }
+    } else {
+        printResult(benchOutput);
     }
 }
 
@@ -379,6 +390,8 @@ int main(int argc, char *argv[]) {
     cmd.add_string('d', "datasetPath", dataSetInput, "Name of dataset or all");
     cmd.add_string('m', "model", modelInput,
                    "Includes all models that have the substring in their filename or all");
+    cmd.add_string('e', "modelEval", evalModelInput,
+                   "Models for which the datastructures are actually constructed");
     cmd.add_string('s', "storage", storageInput, "Name of dataset or all");
 
     if (!cmd.process(argc, argv)) {
