@@ -14,6 +14,3 @@
 [submodule "lib/psimd"]
 	path = lib/psimd
 	url = https://github.com/Maratyszcza/psimd.git
-[submodule "paper/sqlplot-tools"]
-	path = paper/sqlplot-tools
-	url = https://github.com/bingmann/sqlplot-tools.git
