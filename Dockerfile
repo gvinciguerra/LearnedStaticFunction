@@ -87,7 +87,7 @@ cd /lsf\n\
 cd /paper/fig/data\n\
 cp -a /out/. .\n\
 cat bench4.txt >> bench.txt\n\
-cd /paper/fig/
+cd /paper/fig/\n\
 for f in $(find . -name "*.tex"); do\n\
     echo -e "\n\n--- Building $f"\n\
     /opt/sqlplot-tools/build/src/sqlplot-tools "$f" || exit 1\n\
