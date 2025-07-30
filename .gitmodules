@@ -1,9 +1,6 @@
 [submodule "lib/tensorflow"]
 	path = lib/tensorflow
 	url = https://github.com/tensorflow/tensorflow.git
-[submodule "lib/sort"]
-	path = lib/sort
-	url = https://github.com/boostorg/sort
 [submodule "lib/burr-vl"]
 	path = lib/burr-vl
 	url = https://github.com/stefanfred/BuRR.git
