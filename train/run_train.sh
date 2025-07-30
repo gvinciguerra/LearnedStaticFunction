@@ -2,10 +2,7 @@
 
 set -e
 
-if [ -d "/lrdata" ] && [ "$(ls -A /lrdata)" ]; then
-    echo "lrdata directory is not empty. Exiting to prevent overwriting data."
-    exit 0
-fi
+rm -rf /lrdata/*
 
 if [ ! -d "data" ]; then
     mkdir data
@@ -17,10 +14,12 @@ if [ ! -d "lsfvenv" ]; then
     python3 -m venv lsfvenv
 fi
 
+
 source lsfvenv/bin/activate
 python3 -m pip install -r requirements.txt --break-system-packages
 python3 train.py
 
+rm -rf /data_sux4j/*
 mv processed_data/data_sux4j/* /data_sux4j
 mv processed_data/* /lrdata
 mv models/* /lrdata

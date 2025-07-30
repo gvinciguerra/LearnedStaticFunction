@@ -205,7 +205,7 @@ def train(model_path, dataset_name, X_train, y_train, classes, num_layers, hidde
         batch_size=128,
         verbose=2,
         validation_split=0.1,
-        callbacks=[GlobalMinEarlyStopping('loss', 0.01, 3)],
+        callbacks=[GlobalMinEarlyStopping('val_loss', 0.01, 3)],
     )
     train_end = time.perf_counter()
     training_seconds = train_end - train_start
