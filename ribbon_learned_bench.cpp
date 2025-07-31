@@ -12,6 +12,7 @@
 
 #include "learnedretrieval/learned_static_function.hpp"
 #include "learnedretrieval/model_gauss.hpp"
+#include "learnedretrieval/model_freq.hpp"
 
 #define QUERIES 10000000
 #define REPEATS 10
@@ -40,11 +41,12 @@ class FilteredFano50 : public lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, 
 
 template<typename Storage, typename Model, bool doQueries>
 void
-benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput) {
+benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput,
+          std::string competitorName = "ours") {
 
     std::cout << "### Next storage: " << Storage::get_name() << std::endl;
 
-    benchOutput.emplace_back("comp=ours");
+    benchOutput.emplace_back("comp=" + competitorName);
     benchOutput.push_back("storage_name=" + Storage::get_name());
     rocksdb::StopWatchNano timer(true);
 
@@ -335,29 +337,44 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         dispatchBuRR(dataset, benchOutput);
     }
 
+    std::vector<uint32_t> indexes(dataset.size());
+    std::iota(indexes.begin(), indexes.end(), 0);
+    std::shuffle(indexes.begin(), indexes.end(), std::mt19937(42));
+    auto testSize = dataset.size() / 5;
+    std::vector<float> trainX, testX;
+    std::vector<uint16_t> trainY, testY;
+    trainX.reserve(dataset.size() - testSize);
+    trainY.reserve(dataset.size() - testSize);
+    testX.reserve(testSize);
+    testY.reserve(testSize);
+    for (size_t i = 0; i < dataset.size(); ++i) {
+        auto example = dataset.get_example(indexes[i])[0];
+        auto label = dataset.get_label(indexes[i]);
+        if (i < testSize) {
+            testX.push_back(example);
+            testY.push_back(label);
+        } else {
+            trainX.push_back(example);
+            trainY.push_back(label);
+        }
+    }
+
+    if (storageInput == ALL or storageInput == "CSF") {
+        rocksdb::StopWatchNano timer(true);
+        lsf::ModelFreq model(trainY, dataset.classes_count());
+        auto nanos = timer.ElapsedNanos(true);
+        benchOutput.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
+        benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
+        benchOutput.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
+        benchOutput.push_back("model_name=freq");
+        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, lsf::ModelFreq, true>(dataset,
+                                                                                                           model,
+                                                                                                           benchOutput,
+                                                                                                           "ourCSF");
+    }
+
     // model
     if (datasetName.starts_with("gauss")) {
-        std::vector<uint32_t> indexes(dataset.size());
-        std::iota(indexes.begin(), indexes.end(), 0);
-        std::shuffle(indexes.begin(), indexes.end(), std::mt19937(42));
-        auto testSize = dataset.size() / 5;
-        std::vector<float> trainX, testX;
-        std::vector<uint16_t> trainY, testY;
-        trainX.reserve(dataset.size() - testSize);
-        trainY.reserve(dataset.size() - testSize);
-        testX.reserve(testSize);
-        testY.reserve(testSize);
-        for (size_t i = 0; i < dataset.size(); ++i) {
-            auto example = dataset.get_example(indexes[i])[0];
-            auto label = dataset.get_label(indexes[i]);
-            if (i < testSize) {
-                testX.push_back(example);
-                testY.push_back(label);
-            } else {
-                trainX.push_back(example);
-                trainY.push_back(label);
-            }
-        }
         rocksdb::StopWatchNano timer(true);
         lsf::ModelGaussianNaiveBayes model(trainX, trainY, dataset.classes_count());
         auto nanos = timer.ElapsedNanos(true);
