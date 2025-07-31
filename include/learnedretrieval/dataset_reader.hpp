@@ -52,5 +52,7 @@ public:
     std::span<const float> get_example(size_t i) const { return {&examples[i * num_features], num_features}; }
 
     label_type get_label(size_t i) const { return labels[i]; }
+
+    const std::vector<label_type> &get_labels() const { return labels; }
 };
 }
