@@ -45,7 +45,8 @@ void
 benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput,
           std::string competitorName = "ours") {
 
-    std::cout << "### Next storage: " << Storage::get_name() << std::endl;
+    std::cout << "### Next storage: " << Storage::get_name() << " of the " << competitorName << "competitor"
+              << std::endl;
 
     benchOutput.emplace_back("comp=" + competitorName);
     benchOutput.push_back("storage_name=" + Storage::get_name());
@@ -354,7 +355,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
     }
 
     // model
-    if(competitorInput == ALL or competitorInput == "LSF") {
+    if (competitorInput == ALL or competitorInput == "LSF") {
         if (datasetName.starts_with("gauss")) {
             std::vector<uint32_t> indexes(dataset.size());
             std::iota(indexes.begin(), indexes.end(), 0);
