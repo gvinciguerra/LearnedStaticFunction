@@ -7,17 +7,19 @@
 namespace lsf {
 
 
-    constexpr float slotsPerItem = 0.95;
+    constexpr size_t recDepth = 2;
+    constexpr float slotsPerItem = 0.96;
     struct BuRRConfig
-            : public ribbon::RConfig<64, 1, ribbon::ThreshMode::onebit, false, true, false, 0, uint64_t> {
+            : public ribbon::RConfig<128, 1, ribbon::ThreshMode::twobit, false, true, false, 0, uint64_t> {
         static constexpr bool kUseVLR = true;
+        static constexpr Index kBucketSize = 128;
     };
 
 
     template<typename Coding>
     class FilteredLSFStorage {
-        ribbon::ribbon_filter<4, BuRRConfig> correctionVLSF;
-        ribbon::ribbon_filter<4, BuRRConfig> filterVLSF;
+        ribbon::ribbon_filter<recDepth, BuRRConfig> correctionVLSF;
+        ribbon::ribbon_filter<recDepth, BuRRConfig> filterVLSF;
         Coding coder;
 
         size_t statistic_bits_input;
@@ -48,7 +50,7 @@ namespace lsf {
                 filter_bits += filterLength;
             }
 
-            filterVLSF = ribbon_filter<4, BuRRConfig>(slotsPerItem, 42, maxlenfilter);
+            filterVLSF = ribbon_filter<recDepth, BuRRConfig>(slotsPerItem, 42, maxlenfilter);
             filterVLSF.AddRange(inputFilter.get(), inputFilter.get() + n, true);
             filterVLSF.BackSubst();
 
@@ -70,7 +72,7 @@ namespace lsf {
             std::cout << "Preprocessing time (including filter): " << nanos << " ns ("
                       << (nanos / static_cast<double>(n)) << " ns/item)\n";
 
-            correctionVLSF = ribbon_filter<4, BuRRConfig>(slotsPerItem, 42, maxlen);
+            correctionVLSF = ribbon_filter<recDepth, BuRRConfig>(slotsPerItem, 42, maxlen);
             correctionVLSF.AddRange(input.get(), input.get() + n);
             correctionVLSF.BackSubst();
 
