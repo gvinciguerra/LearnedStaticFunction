@@ -75,8 +75,126 @@ namespace lsf {
         }
     };
 
+
+    template<typename Symbol = uint32_t, typename Frequency = float>
+    class FilterHuffmanCoderCSF {
+    public:
+
+        struct Node {
+            Symbol s;
+            size_t n1;
+            size_t n2;
+            size_t parent;
+            bool bitRelParent;
+            Frequency p;
+            float relP;
+            size_t index;
+            bool leaf;
+        };
+
+        class Compare {
+        public:
+            bool operator()(Node a, Node b) {
+                return a.p > b.p;
+            }
+        };
+
+        std::vector<Node> tree;
+        std::priority_queue<Node, std::vector<Node>, Compare> nodes;
+        Node root;
+        Node currentDecodingNode;
+
+        uint64_t encodeCode;
+        bool lastEncBit;
+
+        FilterHuffmanCoderCSF() {}
+
+        FilterHuffmanCoderCSF(size_t, const std::span<Frequency> &f) {
+            tree.clear();
+            for (Symbol i = 0; i < f.size(); ++i) {
+                Node n{i, 0, 0, 0, 0, f[i], 0, i, true};
+                nodes.push(n);
+                tree.push_back(n);
+            }
+            while (nodes.size() > 1) {
+                Node a = nodes.top();
+                nodes.pop();
+                Node b = nodes.top();
+                nodes.pop();
+
+                a.bitRelParent = 0;
+                a.parent = tree.size();
+                b.bitRelParent = 1;
+                b.parent = tree.size();
+
+                tree[a.index] = a;
+                tree[b.index] = b;
+
+                float relp;
+                if (a.p + b.p == 0) {
+                    relp = 0.5f;
+                } else {
+                    relp = a.p / (a.p + b.p);
+                }
+                relp = std::max(std::min(relp, 1.0f - EPS), EPS);
+                Node parent{0, a.index, b.index, 0, 0, a.p + b.p, relp, tree.size(), false};
+                tree.push_back(parent);
+                nodes.push(parent);
+            }
+            root = nodes.top();
+            nodes.pop();
+        }
+
+
+        template<bool encode = false>
+        void init(const std::span<Frequency> &f, Symbol s = -1) {
+            currentDecodingNode = root;
+            if constexpr (encode) {
+                encodeCode = 0;
+                Node current = tree[s];
+                while (current.index != root.index) {
+                    bool b = current.bitRelParent;
+                    encodeCode <<= 1;
+                    encodeCode |= b;
+                    current = tree[current.parent];
+                }
+            }
+        }
+
+        float getRelProbabilityAndAdvance() {
+            return currentDecodingNode.relP;
+        }
+
+        bool hasFinished() {
+            return currentDecodingNode.leaf;
+        }
+
+        void nextEncodeBit() {
+            lastEncBit = encodeCode & 1;
+            nextBit(lastEncBit);
+            encodeCode >>= 1;
+        }
+
+        void nextBit(bool bit) {
+            currentDecodingNode = tree[bit ? currentDecodingNode.n2 : currentDecodingNode.n1];
+        }
+
+        bool getBit() {
+            return lastEncBit;
+        }
+
+        Symbol getResult() {
+            return currentDecodingNode.s;
+        }
+
+        static const std::string get_name() {
+            return "HuffmanCSF";
+        }
+    };
+
     template<typename Symbol = uint32_t, typename Frequency = float>
     class FilterFanoCoder {
+
         struct Elem {
             Frequency f;
             Symbol s;
@@ -118,7 +236,9 @@ namespace lsf {
 
     public:
 
-        FilterFanoCoder(size_t n) : n(n) {
+        FilterFanoCoder() {}
+
+        FilterFanoCoder(size_t n, const std::span<Frequency> &) : n(n) {
             sorted.resize(n);
         }
 
@@ -227,6 +347,7 @@ namespace lsf {
 
     template<typename Symbol = uint32_t, typename Frequency = float>
     class FilterHuffmanCoder {
+
     public:
         struct Node {
             Symbol s;
@@ -256,8 +377,9 @@ namespace lsf {
         uint64_t encodeCode;
         bool lastEncBit;
 
+        FilterHuffmanCoder() {}
 
-        FilterHuffmanCoder(size_t) {}
+        FilterHuffmanCoder(size_t, const std::span<Frequency> &) {}
 
 
         template<bool encode = false>
@@ -353,7 +475,10 @@ namespace lsf {
         Symbol armedSymbol;
         std::span<Frequency> fs;
     public:
-        Filter50PercentWrapper(size_t n) : coder(n) {
+
+        Filter50PercentWrapper(){}
+
+        Filter50PercentWrapper(size_t n, const std::span<Frequency> &f) : coder(n, f) {
         }
 
         template<bool encode = false>
@@ -433,7 +558,11 @@ namespace lsf {
 
     public:
 
-        BitWiseFilterCoding(size_t cats) : coder(cats) {
+        BitWiseFilterCoding() {
+
+        }
+
+        BitWiseFilterCoding(size_t cats, const std::span<Frequency> &f) : coder(cats, f) {
 
         }
 

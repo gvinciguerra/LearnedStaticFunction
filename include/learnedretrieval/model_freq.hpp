@@ -24,7 +24,7 @@ namespace lsf {
         size_t model_params_count() const { return output.size(); }
 
 
-        std::span<float> invoke(std::span<const float> example) {
+        std::span<float> invoke(std::span<const float>) {
             return output;
         }
     };

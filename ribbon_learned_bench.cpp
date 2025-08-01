@@ -38,6 +38,12 @@ void printResult(const std::vector<std::string> &benchOutput) {
 
 template<typename S, typename F>
 class FilteredFano50 : public lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, S, F> {
+public:
+    FilteredFano50() {}
+
+    FilteredFano50(size_t cats, const std::span<F> &f) :  lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, S, F>(cats, f) {
+
+    }
 };
 
 template<typename Storage, typename Model, bool doQueries>
@@ -45,7 +51,7 @@ void
 benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput,
           std::string competitorName = "ours") {
 
-    std::cout << "### Next storage: " << Storage::get_name() << " of the " << competitorName << "competitor"
+    std::cout << "### Next storage: " << Storage::get_name() << " of the " << competitorName << " competitor"
               << std::endl;
 
     benchOutput.emplace_back("comp=" + competitorName);
@@ -348,7 +354,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
         benchOutput.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
         benchOutput.push_back("model_name=freq");
-        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, lsf::ModelFreq, true>(dataset,
+        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoderCSF>>, lsf::ModelFreq, true>(dataset,
                                                                                                            model,
                                                                                                            benchOutput,
                                                                                                            "ourCSF");

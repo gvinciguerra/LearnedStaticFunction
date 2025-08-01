@@ -25,7 +25,7 @@ namespace lsf {
         size_t statistic_bits_input;
     public:
 
-        FilteredLSFStorage() : coder(0) {}
+        FilteredLSFStorage() {}
 
         template<typename F>
         void build(size_t n, size_t classes_count, F get) {
@@ -36,7 +36,9 @@ namespace lsf {
             using namespace ribbon;
             IMPORT_RIBBON_CONFIG(BuRRConfig);
 
-            coder = Coding(classes_count);
+            auto [hashCSF, labelCSF, probabilitiesCSF] = get(0);
+            // probabilitiesCSF are the relative frequencies when used as a CSF
+            coder = Coding(classes_count, probabilitiesCSF);
             size_t maxlenfilter = 0;
             auto inputFilter = std::make_unique<std::pair<Key, ResultRowVLR>[]>(n);
             for (size_t i = 0; i < n; ++i) {
