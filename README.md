@@ -23,13 +23,18 @@ You can find the original here: [Code](https://github.com/lorenzhs/BuRR), [paper
 ### Reproducibility
 
 For convenience, we provide a Docker image that can be used to reproduce our experiments.
-To run it, clone our repo and run Docker.
+To run it, clone our repo and run Docker (as superuser).
 
 ```bash
 git clone --recursive https://github.com/gvinciguerra/LearnedStaticFunction.git
 docker build --pull --rm -t lsf .
 docker run -it -v $(pwd)/lrdata:/lrdata -v $(pwd)/data_sux4j:/data_sux4j -v $(pwd)/out:/out lsf
 ```
+
+It will run the training and the benchmarks for all competitors.
+It will automatically generate the paper based on those results.
+The paper can be found in ```/out/main.pdf``` together with other raw benchmark outputs.
+Note that the runtime is several hours.
 
 ### License
 
