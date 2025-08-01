@@ -41,7 +41,8 @@ class FilteredFano50 : public lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, 
 public:
     FilteredFano50() {}
 
-    FilteredFano50(size_t cats, const std::span<F> &f) :  lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, S, F>(cats, f) {
+    FilteredFano50(size_t cats, const std::span<F> &f) : lsf::Filter50PercentWrapper<lsf::FilterFanoCoder, S, F>(cats,
+                                                                                                                 f) {
 
     }
 };
@@ -350,14 +351,17 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         rocksdb::StopWatchNano timer(true);
         lsf::ModelFreq model(dataset.get_labels(), dataset.classes_count());
         auto nanos = timer.ElapsedNanos(true);
-        benchOutput.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
-        benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
-        benchOutput.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
-        benchOutput.push_back("model_name=freq");
-        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoderCSF>>, lsf::ModelFreq, true>(dataset,
-                                                                                                           model,
-                                                                                                           benchOutput,
-                                                                                                           "ourCSF");
+
+        std::vector benchOutputCopy = benchOutput;
+        benchOutputCopy.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
+        benchOutputCopy.push_back("model_params=" + std::to_string(model.model_params_count()));
+        benchOutputCopy.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
+        benchOutputCopy.push_back("model_name=freq");
+        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoderCSF>>, lsf::ModelFreq, true>(
+                dataset,
+                model,
+                benchOutputCopy,
+                "ourCSF");
     }
 
     // model
@@ -387,10 +391,11 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
             rocksdb::StopWatchNano timer(true);
             lsf::ModelGaussianNaiveBayes model(trainX, trainY, dataset.classes_count());
             auto nanos = timer.ElapsedNanos(true);
-            benchOutput.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
-            benchOutput.push_back("model_params=" + std::to_string(model.model_params_count()));
-            benchOutput.push_back("test_accuracy=" + std::to_string(100.0f * model.eval_accuracy(testX, testY)));
-            dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutput, "gauss");
+            std::vector benchOutputCopy = benchOutput;
+            benchOutputCopy.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
+            benchOutputCopy.push_back("model_params=" + std::to_string(model.model_params_count()));
+            benchOutputCopy.push_back("test_accuracy=" + std::to_string(100.0f * model.eval_accuracy(testX, testY)));
+            dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutputCopy, "gauss");
         } else {
             dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
         }
