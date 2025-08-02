@@ -17,7 +17,7 @@ You can find the original here: [Code](https://github.com/lorenzhs/BuRR), [paper
 
 - [`train`](https://github.com/gvinciguerra/LearnedStaticFunction/tree/main/train) folder: Code for training the ML model using [TensorFlow](https://github.com/tensorflow/tensorflow/)
 - [BuRR-VLR](https://github.com/stefanfred/BuRR/tree/falsepositiveVLR) repository: Implementation of our variable-length BuRR adaption
-- [`include`](https://github.com/gvinciguerra/LearnedStaticFunction/tree/main/include/learnedretrieval) folder: Implementation of our learned data structure
+- [`include`](https://github.com/gvinciguerra/LearnedStaticFunction/tree/main/include/lsf) folder: Implementation of our learned data structure
 - [`csf`](https://github.com/gvinciguerra/LearnedStaticFunction/tree/main/csf) folder: Benchmark code for the GOV competitor
 
 ### Reproducibility

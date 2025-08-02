@@ -1,7 +1,3 @@
-//
-// Created by Giorgio Vinciguerra on 26/01/25.
-//
-
 #pragma once
 
 #include <immintrin.h>

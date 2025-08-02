@@ -10,9 +10,9 @@
 #include "serialization.hpp"
 #include "rocksdb/stop_watch.h"
 
-#include "learnedretrieval/learned_static_function.hpp"
-#include "learnedretrieval/model_gauss.hpp"
-#include "learnedretrieval/model_freq.hpp"
+#include "lsf/learned_static_function.hpp"
+#include "lsf/model_gauss.hpp"
+#include "lsf/model_freq.hpp"
 
 #define QUERIES 10000000
 #define REPEATS 10

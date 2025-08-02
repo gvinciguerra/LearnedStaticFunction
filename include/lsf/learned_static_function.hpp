@@ -1,8 +1,8 @@
 #pragma once
 
-#include "learnedretrieval/filter_coding.hpp"
-#include "learnedretrieval/dataset_reader.hpp"
-#include "learnedretrieval/model_wrapper.hpp"
+#include "filter_coding.hpp"
+#include "dataset_reader.hpp"
+#include "model_wrapper.hpp"
 
 namespace lsf {
 
