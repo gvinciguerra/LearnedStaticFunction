@@ -1,0 +1,68 @@
+% IMPORT-DATA bench data/bench.txt
+% SQL DELETE FROM bench WHERE quant == "bla"
+% SQL DELETE FROM bench WHERE comp != "ours"
+% SQL DELETE FROM bench WHERE storage_name != "Filtered-Fano50"
+% SQL DELETE FROM bench WHERE quant != "float16"
+% SQL ALTER TABLE bench ADD cross_entropy_and_model float
+% SQL UPDATE bench SET cross_entropy_and_model = cross_entropy_bit_per_key + COALESCE(model_bits, 0)
+
+\centering
+
+	\begin{tabular}{l ccr rrrrrrr}
+		\toprule
+        \multirow{2}{*}{Dataset ($H_0$)} & \multicolumn{3}{c}{Model} & \multirow{2}{*}{Training} & \multicolumn{2}{c}{Accuracy} & \multicolumn{3}{c}{Space}& \multirow{2}{*}{Inference} \\
+                                           \cmidrule(lr){2-4}                                      \cmidrule(lr){6-7}             \cmidrule(lr){8-10}
+                                         & Layers & Units     & \# Param       &                          & Top       & Top-3            & $S(ℳ,f) / n$ & $|enc(ℳ)| / n$ & $\Sigma / n$& \\
+
+		
+		%% TABULAR REFORMAT(col 3=(precision=0) col 4=(precision=1) col 5=(precision=1) col 6=(precision=4) col 7=(precision=4) col 8=(precision=4))
+		%% SELECT
+		%%    IIF(cross_entropy_and_model == (SELECT MIN(inner.cross_entropy_and_model) FROM bench AS inner WHERE outer.dataset_name==inner.dataset_name),
+		%%    CASE
+		%%      WHEN outer.dataset_name=="gaussian0" THEN "\midrule gauss $\sigma$=0.25 (" || outer.entropy || ")"
+		%%      WHEN outer.dataset_name=="gaussian1" THEN "gauss $\sigma$=0.5 (" || outer.entropy || ")"
+		%%      WHEN outer.dataset_name=="gaussian2" THEN "gauss $\sigma$=0.75 (" || outer.entropy || ")"
+		%%      WHEN outer.dataset_name=="gaussian3" THEN "gauss $\sigma$=1 (" || outer.entropy || ")"
+		%%      ELSE "\midrule\multirow{4}{*}{" || outer.dataset_name || " (" || ROUND(outer.entropy, 2) || ")}"
+		%%    END,"") AS ds,
+		%%    CASE
+		%%      WHEN outer.dataset_name LIKE "gaussian%" THEN "\multicolumn{2}{c}{GNB}"
+		%%      WHEN outer.model_l==0                    THEN "\multicolumn{2}{c}{LR}"
+		%%      ELSE outer.model_l || " & " || outer.model_h
+		%%    END,
+		%%    outer.model_params,
+		%%  IIF(1000.0* 1000.0* outer.training_seconds / outer.size<1, "<1", 1000.0* 1000.0* outer.training_seconds / outer.size),
+		%%  outer.test_accuracy,
+		%%  COALESCE(outer.test_top3_accuracy, "--"),
+		%%  ROUND(cross_entropy_bit_per_key,4),
+		%%  IIF(ROUND(model_bits,4) == 0, "<0.0001" , ROUND(model_bits,4)),
+		%%  ROUND(cross_entropy_and_model,4),
+		%%  CEIL(model_inf_ns)
+		%% FROM bench AS outer
+		%% ORDER BY outer.dataset_name LIKE "gaussian%", outer.dataset_name, cross_entropy_and_model
+  \midrule\multirow{4}{*}{covertype (1.74)} &                  2 & 50 &  5657 & 118 &  87.4 & 99.9 & 0.4361 &  0.1558 & 0.5919 &  793 \\
+                                            &                 1 & 100 &  6207 & 123 &  85.2 & 99.9 & 0.5133 &  0.1709 & 0.6842 &  729 \\
+                                            &                  1 & 50 &  3107 &  90 &  81.8 & 99.8 & 0.6202 &  0.0856 & 0.7057 &  594 \\
+                                            &  \multicolumn{2}{c}{LR} &   385 &  29 &  72.2 & 99.3 & 0.9172 &  0.0106 & 0.9278 &  322 \\
+       \midrule\multirow{4}{*}{nids (2.38)} &                  2 & 50 &  3610 &  31 &  70.2 & 94.2 & 1.0578 &  0.0419 & 1.0997 &  776 \\
+                                            &                  1 & 50 &  1060 &  29 &  69.4 & 93.3 & 1.1020 &  0.0123 & 1.1143 &  561 \\
+                                            &                 1 & 100 &  2110 &  30 &  69.5 & 93.6 & 1.0931 &  0.0245 & 1.1176 &  705 \\
+                                            &  \multicolumn{2}{c}{LR} &   110 &  22 &  66.4 & 91.4 & 1.2762 &  0.0013 & 1.2775 &  310 \\
+      \midrule\multirow{4}{*}{songs (6.25)} &                  2 & 50 &  8082 &  31 &  29.4 & 50.4 & 3.8438 &  0.1115 & 3.9553 &  986 \\
+                                            &                  1 & 50 &  5532 &  29 &  28.5 & 49.1 & 3.9243 &  0.0763 & 4.0006 &  778 \\
+                                            &                 1 & 100 & 10982 &  30 &  29.4 & 50.3 & 3.8526 &  0.1515 & 4.0041 & 1062 \\
+                                            &  \multicolumn{2}{c}{LR} &  2214 &  17 &  23.8 & 43.0 & 4.3365 &  0.0305 & 4.3671 &  568 \\
+       \midrule\multirow{4}{*}{urls (0.99)} &  \multicolumn{2}{c}{LR} &    16 & 102 &  99.4 &   -- & 0.0448 &  0.0011 & 0.0459 &  129 \\
+                                            &                  1 & 50 &   851 &  47 &  99.7 &   -- & 0.0243 &  0.0577 & 0.0820 &  398 \\
+                                            &                 1 & 100 &  1701 &  37 &  99.6 &   -- & 0.0244 &  0.1154 & 0.1398 &  567 \\
+                                            &                  2 & 50 &  3401 &  19 &  99.6 &   -- & 0.0253 &  0.2308 & 0.2561 &  621 \\
+         \midrule gauss $\sigma$=0.25 (3.0) & \multicolumn{2}{c}{GNB} &    16 &  <1 & 100.0 &   -- & 0.0002 & <0.0001 & 0.0002 &  110 \\
+                   gauss $\sigma$=0.5 (3.0) & \multicolumn{2}{c}{GNB} &    16 &  <1 &  96.0 &   -- & 0.1526 & <0.0001 & 0.1526 &  117 \\
+                  gauss $\sigma$=0.75 (3.0) & \multicolumn{2}{c}{GNB} &    16 &  <1 &  84.0 &   -- & 0.5579 & <0.0001 & 0.5579 &  118 \\
+                     gauss $\sigma$=1 (3.0) & \multicolumn{2}{c}{GNB} &    16 &  <1 &  72.2 &   -- & 0.9139 & <0.0001 & 0.9139 &  103 \\
+  % END TABULAR SELECT    IIF(cross_entropy_and_model == (SELECT MIN(inner.c...)))
+
+		\bottomrule
+
+	\end{tabular}
+

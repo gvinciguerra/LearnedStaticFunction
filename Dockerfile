@@ -67,8 +67,7 @@ RUN cd build && make -j$(nproc)
 
 
 ############################ Build sqlplot-tools ############################
-RUN curl -L -o paper.zip https://data.d4science.net/191xG
-RUN unzip paper.zip -d /paper
+COPY paper /paper
 RUN git clone https://github.com/bingmann/sqlplot-tools.git /opt/sqlplot-tools
 RUN mkdir /opt/sqlplot-tools/build
 WORKDIR /opt/sqlplot-tools/build
@@ -93,9 +92,6 @@ for f in $(find . -name "*.tex"); do\n\
     /opt/sqlplot-tools/build/src/sqlplot-tools "$f" || exit 1\n\
 done\n\
 cd /paper\n\
-pdflatex main.tex\n\
-bibtex main\n\
-pdflatex main.tex\n\
 pdflatex main.tex\n\
 cp main.pdf /out/' > entrypoint.sh
 

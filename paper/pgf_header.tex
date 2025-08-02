@@ -1,0 +1,85 @@
+\usepackage{pgfplots}
+\pgfplotsset{compat=newest}
+
+\pgfplotscreateplotcyclelist{myColorList}{%
+  red,mark=triangle\\% Slightly darker than LIPIcs yellow
+  blue,mark=pentagon\\%
+  black,mark=square\\%
+  brown,mark=o\\%
+  teal,mark=diamond\\%
+  violet,mark=Mercedes star\\%
+  orange,mark=star\\%
+  magenta,mark=|\\%
+}
+
+\pgfplotsset{
+  % Mark repeat, but the last mark is always drawn
+  mark repeat*/.style={
+    scatter,
+    scatter src=x,
+    scatter/@pre marker code/.code={
+      \pgfmathtruncatemacro\usemark{
+        or(mod(\coordindex,#1)==0, (\coordindex==(\numcoords-1))
+      }
+      \ifnum\usemark=0
+        \pgfplotsset{mark=none}
+      \fi
+    },
+    scatter/@post marker code/.code={}
+  },
+  log x ticks with fixed point/.style={
+      xticklabel={
+        \pgfkeys{/pgf/fpu=true}
+        \pgfmathparse{exp(\tick)}%
+        \pgfmathprintnumber[fixed relative, precision=3]{\pgfmathresult}
+        \pgfkeys{/pgf/fpu=false}
+      }
+  },
+  log y ticks with fixed point/.style={
+      yticklabel={
+        \pgfkeys{/pgf/fpu=true}
+        \pgfmathparse{exp(\tick)}%
+        \pgfmathprintnumber[fixed relative, precision=3]{\pgfmathresult}
+        \pgfkeys{/pgf/fpu=false}
+      }
+  },
+  every axis/.style={scale only axis},
+  major grid style={thin,dotted},
+  minor grid style={thin,dotted},
+  ymajorgrids,
+  yminorgrids,
+  every axis/.append style={
+    line width=0.9pt,
+    tick style={
+      line cap=round,
+      thin,
+      major tick length=4pt,
+      minor tick length=2pt,
+    },
+    mark options={solid},
+  },
+  legend cell align=left,
+  legend style={
+    line width=0.7pt,
+    /tikz/every even column/.append style={column sep=2mm,black},
+    /tikz/every odd column/.append style={black},
+    mark options={solid},
+    font=\footnotesize,
+  },
+  % move title closer
+  title style={yshift=-2pt},
+  % less space on left and right
+  enlarge x limits=0.04,
+  scale only axis,
+  /pgf/number format/1000 sep={},
+  axis lines*=left,
+  xlabel near ticks,
+  ylabel near ticks,
+  axis lines*=left,
+  label style={font=\footnotesize},
+  every axis y label/.append style={yshift=-1pt,inner sep=0,outer sep=0},
+  tick label style={font=\footnotesize},
+  cycle list name=myColorList,
+}
+
+

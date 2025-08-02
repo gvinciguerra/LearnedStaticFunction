@@ -1,0 +1,30 @@
+% IMPORT-DATA bench data/bench.txt
+
+\centering
+	\begin{tabular}{lrrrr}
+		\toprule
+		Dataset         & $n$     & \# Features & \# Classes & $H_0$  \\ \midrule
+
+		
+		%% TABULAR REFORMAT(col 4=(precision=3))
+		%% SELECT
+		%%  IIF(dataset_name LIKE "gaussian%", "gauss",dataset_name),
+		%%  IIF(size==100000000,"100\;M",size),
+		%%  features,
+		%%  classes,
+		%%  entropy
+		%% FROM bench
+		%% WHERE comp IS "ours"
+		%% GROUP BY entropy
+		%% ORDER BY dataset_name LIKE "gaussian%", dataset_name
+  covertype &  581012 & 54 &  7 & 1.739 \\
+       nids & 1379274 & 10 & 10 & 2.376 \\
+      songs & 1159764 & 26 & 82 & 6.249 \\
+       urls &  235795 & 15 &  2 & 0.985 \\
+      gauss &  100\;M &  1 &  8 & 3.000 \\
+  % END TABULAR SELECT  IIF(dataset_name LIKE "gaussian%", "gauss",dataset_nam...)
+
+		\bottomrule
+
+	\end{tabular}
+

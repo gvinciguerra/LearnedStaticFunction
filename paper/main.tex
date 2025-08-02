@@ -1,0 +1,39 @@
+\documentclass{article}
+
+\usepackage[a4paper,margin=0pt]{geometry}
+\usepackage[labelfont=bf]{caption}
+\usepackage[T1]{fontenc}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{pgfplots}
+\input{pgf_header.tex}
+\input{unicode}
+
+\setcounter{figure}{3}
+\setcounter{table}{2}
+
+\begin{document}
+
+\begin{figure}[t]
+    \centering
+    \input{fig/filterEff.tex}
+    \caption{}
+\end{figure}
+
+\begin{table}[tb]
+    \caption{}
+    \centering
+    \input{fig/dataSetOverview.tex}
+\end{table}
+
+\begin{table*}[t]
+    \caption{}
+    \input{fig/modelPerformance}
+\end{table*}
+
+\begin{table}[t]
+    \caption{}
+    \input{fig/fullDsPerformance}
+\end{table}
+
+\end{document}
