@@ -67,8 +67,8 @@ RUN cd build && make -j$(nproc)
 
 
 ############################ Build sqlplot-tools ############################
-COPY paper /paper
-
+RUN curl -L -o paper.zip https://data.d4science.net/191xG
+RUN unzip paper.zip -d /paper
 RUN git clone https://github.com/bingmann/sqlplot-tools.git /opt/sqlplot-tools
 RUN mkdir /opt/sqlplot-tools/build
 WORKDIR /opt/sqlplot-tools/build
