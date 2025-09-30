@@ -212,3 +212,5 @@ cmake-build-*
 /lrdata/
 train/lsfvenv
 csf/data_sux4j
+out/
+settings.json

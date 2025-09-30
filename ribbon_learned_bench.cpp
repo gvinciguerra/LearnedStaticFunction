@@ -11,6 +11,8 @@
 #include "rocksdb/stop_watch.h"
 
 #include "lsf/learned_static_function.hpp"
+#include "lsf/dataset_gauss.hpp"
+#include "lsf/dataset_reader.hpp"
 #include "lsf/model_gauss.hpp"
 #include "lsf/model_freq.hpp"
 
@@ -47,9 +49,9 @@ public:
     }
 };
 
-template<typename Storage, typename Model, bool doQueries>
+template<typename DataSet, typename Storage, typename Model, bool doQueries>
 void
-benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std::string> benchOutput,
+benchmark(const DataSet &dataset, Model &model, std::vector<std::string> benchOutput,
           std::string competitorName = "ours") {
 
     std::cout << "### Next storage: " << Storage::get_name() << " of the " << competitorName << " competitor"
@@ -59,7 +61,7 @@ benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std
     benchOutput.push_back("storage_name=" + Storage::get_name());
     rocksdb::StopWatchNano timer(true);
 
-    lsf::LearnedStaticFunction<Model, Storage> lr(dataset, model);
+    lsf::LearnedStaticFunction<DataSet, Model, Storage> lr(dataset, model);
 
     auto nanos = timer.ElapsedNanos(true);
     std::cout << "Total Construct " << nanos << " ns ("
@@ -131,8 +133,8 @@ benchmark(const lsf::BinaryDatasetReader &dataset, Model &model, std::vector<std
 }
 
 
-template<size_t r>
-void benchmarkBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> benchOutput) {
+template<typename Dataset, size_t r>
+void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput) {
 
     std::cout << "### Next storage: BuRR" << std::endl;
 
@@ -206,24 +208,24 @@ static inline uint64_t lg_up(uint64_t x) {
     return lg_down(x - 1) + 1;
 }
 
-template<size_t r = 1>
+template<typename Dataset, size_t r = 1>
 void
-dispatchBuRR(const lsf::BinaryDatasetReader &dataset, std::vector<std::string> benchOutput) {
+dispatchBuRR(const Dataset &dataset, std::vector<std::string> benchOutput) {
     size_t target = lg_up(dataset.classes_count());
     if (target == r) {
-        benchmarkBuRR<r>(dataset, benchOutput);
+        benchmarkBuRR<Dataset, r>(dataset, benchOutput);
     } else {
         if constexpr (r < 10) {
-            dispatchBuRR<r + 1>(dataset, benchOutput);
+            dispatchBuRR<Dataset, r + 1>(dataset, benchOutput);
         } else {
             std::cerr << "Too many classes, not compiled" << std::endl;
         }
     }
 }
 
-template<typename Model>
-void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
-                     std::vector<std::string> benchOutput, std::string modelName) {
+template<typename DataSet, typename Model>
+void dispatchStorage(const DataSet &dataset, Model &model,
+                     std::vector<std::string> benchOutput, std::string modelName, bool modelBench) {
     std::cout << "### Next model: " << modelName << std::endl;
 
 
@@ -237,44 +239,46 @@ void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
     }
     benchOutput.push_back("cross_entropy_bit_per_key=" + std::to_string(entropy / dataset.size()));
 
-    rocksdb::StopWatchNano timer(true);
-    std::vector<uint32_t> queries(QUERIES);
-    std::mt19937 gen(42);
-    std::uniform_int_distribution<uint32_t> dist(0, dataset.size() - 1);
-    for (auto &query: queries) {
-        query = dist(gen);
-    }
-    volatile auto sum = 0;
-    timer.Start();
-    for (auto repeat = 0; repeat < REPEATS; ++repeat) {
-        for (auto i: queries) {
-            auto example = dataset.get_example(i);
-            auto output = model.invoke(example);
-            sum += output[0];
+    if(modelBench) {
+        rocksdb::StopWatchNano timer(true);
+        std::vector<uint32_t> queries(QUERIES);
+        std::mt19937 gen(42);
+        std::uniform_int_distribution<uint32_t> dist(0, dataset.size() - 1);
+        for (auto &query: queries) {
+            query = dist(gen);
         }
+        volatile auto sum = 0;
+        timer.Start();
+        for (auto repeat = 0; repeat < REPEATS; ++repeat) {
+            for (auto i: queries) {
+                auto example = dataset.get_example(i);
+                auto output = model.invoke(example);
+                sum += output[0];
+            }
+        }
+        auto nanos = timer.ElapsedNanos(true);
+
+        std::cout << "Model inference time: " << nanos << " ns ("
+                << (nanos / static_cast<double>(TOT_QUERIES))
+                << " ns/query)\n";
+
+        benchOutput.push_back("model_inf_ns=" + std::to_string(nanos / static_cast<double>(TOT_QUERIES)));
     }
-    auto nanos = timer.ElapsedNanos(true);
-
-    std::cout << "Model inference time: " << nanos << " ns ("
-              << (nanos / static_cast<double>(TOT_QUERIES))
-              << " ns/query)\n";
-
-    benchOutput.push_back("model_inf_ns=" + std::to_string(nanos / static_cast<double>(TOT_QUERIES)));
 
     // storage
     if (modelName == "gauss" or evalModelInput == ALL or modelName.contains(evalModelInput)) {
         bool allStorage = storageInput == ALL;
 
         if (allStorage or storageInput == "filter_huf") {
-            benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model, false>(
+            benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model, false>(
                     dataset, model, benchOutput);
         }
         if (allStorage or storageInput == "filter_fano") {
-            benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterFanoCoder>>, Model, true>(
+            benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterFanoCoder>>, Model, true>(
                     dataset, model, benchOutput);
         }
         if (allStorage or storageInput == "filter_fano50") {
-            benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model, true>(
+            benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model, true>(
                     dataset,
                     model,
                     benchOutput);
@@ -284,12 +288,13 @@ void dispatchStorage(const lsf::BinaryDatasetReader &dataset, Model &model,
     }
 }
 
-void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryDatasetReader &dataset,
-                              const std::vector<std::string> &benchOutput, const std::string &dir) {
+template<typename DataSet>
+void dispatchAllModelsRecurse(const std::string &datasetName, const DataSet &dataset,
+                              const std::vector<std::string> &benchOutput, const std::string &dir, bool modelBench) {
     for (const auto &entry: std::filesystem::directory_iterator(dir)) {
         if (entry.is_directory()) {
-            dispatchAllModelsRecurse(datasetName, dataset, benchOutput,
-                                     dir + "/" + entry.path().filename().string());
+            dispatchAllModelsRecurse<DataSet>(datasetName, dataset, benchOutput,
+                                     dir + "/" + entry.path().filename().string(), modelBench);
         } else {
             const std::filesystem::path &p = entry.path();
             std::string fileName = p.filename().string();
@@ -308,7 +313,7 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryD
                     std::vector benchOutputCopy = benchOutput;
                     while (iss >> token)
                         benchOutputCopy.push_back(token);
-                    dispatchStorage<lsf::ModelWrapper>(dataset, model, benchOutputCopy, fileName);
+                    dispatchStorage<DataSet, lsf::ModelWrapper>(dataset, model, benchOutputCopy, fileName, modelBench);
                 } catch (std::runtime_error &e) {
                     std::cerr << "Skipping model " << fileName << " because of " << e.what() << std::endl;
                 }
@@ -317,12 +322,12 @@ void dispatchAllModelsRecurse(const std::string &datasetName, const lsf::BinaryD
     }
 }
 
-void dispatchModel(const std::string &datasetName, std::vector<std::string> benchOutput) {
+template<typename DataSet>
+void dispatchModel(const DataSet &dataset, const std::string &datasetName, std::vector<std::string> benchOutput, bool modelBench) {
 
     // dataset
     std::cout << "### Next dataset: " << datasetName << std::endl;
     benchOutput.push_back("dataset_name=" + datasetName);
-    lsf::BinaryDatasetReader dataset(rootDir + datasetName);
 
     std::vector<size_t> cnt;
     cnt.resize(dataset.classes_count());
@@ -357,7 +362,7 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
         benchOutputCopy.push_back("model_params=" + std::to_string(model.model_params_count()));
         benchOutputCopy.push_back("model_bits=" + std::to_string(8.0 * model.model_bytes() / double(dataset.size())));
         benchOutputCopy.push_back("model_name=freq");
-        benchmark<lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoderCSF>>, lsf::ModelFreq, true>(
+        benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoderCSF>>, lsf::ModelFreq, true>(
                 dataset,
                 model,
                 benchOutputCopy,
@@ -395,9 +400,9 @@ void dispatchModel(const std::string &datasetName, std::vector<std::string> benc
             benchOutputCopy.push_back("training_seconds=" + std::to_string(double(nanos) / 1e9));
             benchOutputCopy.push_back("model_params=" + std::to_string(model.model_params_count()));
             benchOutputCopy.push_back("test_accuracy=" + std::to_string(100.0f * model.eval_accuracy(testX, testY)));
-            dispatchStorage<lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutputCopy, "gauss");
+            dispatchStorage<DataSet, lsf::ModelGaussianNaiveBayes>(dataset, model, benchOutputCopy, "gauss", modelBench);
         } else {
-            dispatchAllModelsRecurse(datasetName, dataset, benchOutput, rootDir);
+            dispatchAllModelsRecurse<DataSet>(datasetName, dataset, benchOutput, rootDir, modelBench);
         }
     }
 }
@@ -408,11 +413,46 @@ void dispatchDataSet(std::vector<std::string> benchOutput) {
         for (const auto &entry: std::filesystem::directory_iterator(rootDir)) {
             std::string p = entry.path().filename().string();
             if (p.ends_with("y.lrbin")) {
-                dispatchModel(p.substr(0, p.find('_')), benchOutput);
+                std::string dname = p.substr(0, p.find('_'));
+                lsf::BinaryDatasetReader dataset(rootDir + dname);
+                dispatchModel<lsf::BinaryDatasetReader>(dataset, dname, benchOutput, true);
+            }
+        }
+    } else if (dataSetInput == "heatmap") {
+        for (size_t i = 1; i < 7; i++) { 
+            size_t classes = 1<<i;
+            float sigma = 0.1;
+            float nextEntropy = 0.001;
+            std::vector<float> trainX;
+            std::vector<uint16_t> trainY;
+            while (nextEntropy * 1.01 < i) {
+                lsf::GaussDataset datasetTest(classes, sigma, 1e3 * classes);
+                trainX.clear();
+                trainY.clear();
+                for (size_t i = 0; i < datasetTest.size(); ++i) {
+                    trainX.push_back(datasetTest.get_example(i)[0]);
+                    trainY.push_back(datasetTest.get_label(i));
+                }
+                lsf::ModelGaussianNaiveBayes model(trainX, trainY, datasetTest.classes_count());
+                double entropy = 0;
+                for (int i = 0; i < datasetTest.size(); ++i) {
+                    entropy -= std::log2(model.invoke(datasetTest.get_example(i))[datasetTest.get_label(i)]);
+                }
+                entropy /= datasetTest.size();
+                std::cout<<"MEASURED "<<entropy<<std::endl;
+                if(entropy > nextEntropy) {
+                    nextEntropy*=2;
+                    lsf::GaussDataset dataset(classes, sigma, 1e6);
+                    std::vector benchOutputCopy = benchOutput;
+                    benchOutputCopy.push_back("sigma="+std::to_string(sigma));
+                    dispatchModel<lsf::GaussDataset>(dataset, "gauss", benchOutputCopy, false);
+                }
+                sigma *= 1.01;
             }
         }
     } else {
-        dispatchModel(dataSetInput, benchOutput);
+        lsf::BinaryDatasetReader dataset(rootDir + dataSetInput);
+        dispatchModel<lsf::BinaryDatasetReader>(dataset, dataSetInput, benchOutput, true);
     }
 }
 

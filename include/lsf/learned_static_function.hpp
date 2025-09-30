@@ -124,7 +124,7 @@ namespace lsf {
         }
     };
 
-    template<typename Model, typename Storage>
+    template<typename DataSet, typename Model, typename Storage>
     class LearnedStaticFunction {
         XXH3_state_t *state;
         Model &model;
@@ -132,7 +132,7 @@ namespace lsf {
 
     public:
 
-        LearnedStaticFunction(const lsf::BinaryDatasetReader &dataset, Model &model) : model(model) {
+        LearnedStaticFunction(const DataSet &dataset, Model &model) : model(model) {
             state = XXH3_createState();
             assert(state);
             storage = Storage();
