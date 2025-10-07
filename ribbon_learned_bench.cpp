@@ -16,7 +16,7 @@
 #include "lsf/model_gauss.hpp"
 #include "lsf/model_freq.hpp"
 
-#define QUERIES 100000
+#define QUERIES 10000000
 #define REPEATS 10
 #define TOT_QUERIES (QUERIES*REPEATS)
 
