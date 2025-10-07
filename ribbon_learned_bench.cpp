@@ -16,7 +16,7 @@
 #include "lsf/model_gauss.hpp"
 #include "lsf/model_freq.hpp"
 
-#define QUERIES 10000000
+#define QUERIES 100000
 #define REPEATS 10
 #define TOT_QUERIES (QUERIES*REPEATS)
 
@@ -270,7 +270,7 @@ void dispatchStorage(const DataSet &dataset, Model &model,
         bool allStorage = storageInput == ALL;
 
         if (allStorage or storageInput == "filter_huf") {
-            benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model, false>(
+            benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<lsf::FilterHuffmanCoder>>, Model, true>(
                     dataset, model, benchOutput);
         }
         if (allStorage or storageInput == "filter_fano") {
@@ -279,6 +279,12 @@ void dispatchStorage(const DataSet &dataset, Model &model,
         }
         if (allStorage or storageInput == "filter_fano50") {
             benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50>>, Model, true>(
+                    dataset,
+                    model,
+                    benchOutput);
+        }
+        if (allStorage or storageInput == "root_filter_fano50") {
+            benchmark<DataSet, lsf::FilteredLSFStorage<lsf::BitWiseFilterCoding<FilteredFano50, lsf::FilterLengthOnlyRootWrapper<lsf::FilterLengthStrategyOpt>>>, Model, true>(
                     dataset,
                     model,
                     benchOutput);
@@ -407,6 +413,39 @@ void dispatchModel(const DataSet &dataset, const std::string &datasetName, std::
     }
 }
 
+void gaussheatmap(std::vector<std::string> benchOutput) {
+    for (size_t i = 1; i < 7; i++) { 
+        size_t classes = 1<<i;
+        float sigma = 0.1;
+        float nextEntropy = 0.001;
+        std::vector<float> trainX;
+        std::vector<uint16_t> trainY;
+        while (nextEntropy * 1.01 < i) {
+            lsf::GaussDataset datasetTest(classes, sigma, 1e3 * classes);
+            trainX.clear();
+            trainY.clear();
+            for (size_t i = 0; i < datasetTest.size(); ++i) {
+                trainX.push_back(datasetTest.get_example(i)[0]);
+                trainY.push_back(datasetTest.get_label(i));
+            }
+            lsf::ModelGaussianNaiveBayes model(trainX, trainY, datasetTest.classes_count());
+            double entropy = 0;
+            for (int i = 0; i < datasetTest.size(); ++i) {
+                entropy -= std::log2(model.invoke(datasetTest.get_example(i))[datasetTest.get_label(i)]);
+            }
+            entropy /= datasetTest.size();
+            std::cout<<"MEASURED "<<entropy<<std::endl;
+            if(entropy > nextEntropy) {
+                nextEntropy*=1.1;
+                lsf::GaussDataset dataset(classes, sigma, 1e6);
+                std::vector benchOutputCopy = benchOutput;
+                benchOutputCopy.push_back("sigma="+std::to_string(sigma));
+                dispatchModel<lsf::GaussDataset>(dataset, "gauss", benchOutputCopy, false);
+            }
+            sigma *= 1.001;
+        }
+    }
+}
 
 void dispatchDataSet(std::vector<std::string> benchOutput) {
     if (dataSetInput == ALL) {
@@ -419,37 +458,7 @@ void dispatchDataSet(std::vector<std::string> benchOutput) {
             }
         }
     } else if (dataSetInput == "heatmap") {
-        for (size_t i = 1; i < 7; i++) { 
-            size_t classes = 1<<i;
-            float sigma = 0.1;
-            float nextEntropy = 0.001;
-            std::vector<float> trainX;
-            std::vector<uint16_t> trainY;
-            while (nextEntropy * 1.01 < i) {
-                lsf::GaussDataset datasetTest(classes, sigma, 1e3 * classes);
-                trainX.clear();
-                trainY.clear();
-                for (size_t i = 0; i < datasetTest.size(); ++i) {
-                    trainX.push_back(datasetTest.get_example(i)[0]);
-                    trainY.push_back(datasetTest.get_label(i));
-                }
-                lsf::ModelGaussianNaiveBayes model(trainX, trainY, datasetTest.classes_count());
-                double entropy = 0;
-                for (int i = 0; i < datasetTest.size(); ++i) {
-                    entropy -= std::log2(model.invoke(datasetTest.get_example(i))[datasetTest.get_label(i)]);
-                }
-                entropy /= datasetTest.size();
-                std::cout<<"MEASURED "<<entropy<<std::endl;
-                if(entropy > nextEntropy) {
-                    nextEntropy*=2;
-                    lsf::GaussDataset dataset(classes, sigma, 1e6);
-                    std::vector benchOutputCopy = benchOutput;
-                    benchOutputCopy.push_back("sigma="+std::to_string(sigma));
-                    dispatchModel<lsf::GaussDataset>(dataset, "gauss", benchOutputCopy, false);
-                }
-                sigma *= 1.01;
-            }
-        }
+        gaussheatmap(benchOutput);
     } else {
         lsf::BinaryDatasetReader dataset(rootDir + dataSetInput);
         dispatchModel<lsf::BinaryDatasetReader>(dataset, dataSetInput, benchOutput, true);

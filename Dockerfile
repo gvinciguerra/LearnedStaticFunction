@@ -83,6 +83,7 @@ cd /lsf\n\
 ./build/plot_model_calibration -r /lrdata/ | tee /out/calibration.txt\n\
 ./build/filter_tuner | tee /out/filter.txt\n\
 ./build/ribbon_learned_bench -r /lrdata/ -e float16 | tee /out/bench.txt\n\
+./build/ribbon_learned_bench -r /lrdata/ -d heatmap -s filter_fano50 -c LSF | tee /out/heatmap.txt\n\
 cd /paper/fig/data\n\
 cp -a /out/. .\n\
 cat bench4.txt >> bench.txt\n\
