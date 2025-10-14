@@ -413,15 +413,16 @@ void dispatchModel(const DataSet &dataset, const std::string &datasetName, std::
     }
 }
 
+
 void gaussheatmap(std::vector<std::string> benchOutput) {
-    for (size_t i = 1; i < 7; i++) { 
+    for (size_t i = 1; i < 6; i+=2) { 
         size_t classes = 1<<i;
         float sigma = 0.1;
         float nextEntropy = 0.001;
         std::vector<float> trainX;
         std::vector<uint16_t> trainY;
         while (nextEntropy * 1.01 < i) {
-            lsf::GaussDataset datasetTest(classes, sigma, 1e3 * classes);
+            lsf::GaussDataset datasetTest(classes, sigma, 1e4 * classes);
             trainX.clear();
             trainY.clear();
             for (size_t i = 0; i < datasetTest.size(); ++i) {
@@ -430,19 +431,19 @@ void gaussheatmap(std::vector<std::string> benchOutput) {
             }
             lsf::ModelGaussianNaiveBayes model(trainX, trainY, datasetTest.classes_count());
             double entropy = 0;
-            for (int i = 0; i < datasetTest.size(); ++i) {
-                entropy -= std::log2(model.invoke(datasetTest.get_example(i))[datasetTest.get_label(i)]);
+            for (int j = 0; j < datasetTest.size(); ++j) {
+                entropy -= std::log2(model.invoke(datasetTest.get_example(j))[datasetTest.get_label(j)]);
             }
             entropy /= datasetTest.size();
             std::cout<<"MEASURED "<<entropy<<std::endl;
             if(entropy > nextEntropy) {
-                nextEntropy*=1.1;
-                lsf::GaussDataset dataset(classes, sigma, 1e6);
+                nextEntropy*=1.4;
+                lsf::GaussDataset dataset(classes, sigma, 1e8);
                 std::vector benchOutputCopy = benchOutput;
                 benchOutputCopy.push_back("sigma="+std::to_string(sigma));
                 dispatchModel<lsf::GaussDataset>(dataset, "gauss", benchOutputCopy, false);
             }
-            sigma *= 1.001;
+            sigma *= 1.005;
         }
     }
 }
