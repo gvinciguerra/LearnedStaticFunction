@@ -47,12 +47,20 @@ namespace lsf {
                 return 0;
             return OtherFilter::getFilterBits(probability, level);
         }
+        
+        static const std::string get_name() {
+            return "Root_" + OtherFilter::get_name();
+        }
     };
 
     class FilterLengthStrategyNoFilter {
     public:
         static uint64_t getFilterBits(float probability, size_t level) {
             return 0;
+        }
+        
+        static const std::string get_name() {
+            return "No";
         }
     };
 
@@ -72,6 +80,10 @@ namespace lsf {
             while (bits < MAX_FILTER_BITS && PROBABILITY_THRESHOLDS[bits] > probability)
                 bits++;
             return bits;
+        }
+        
+        static const std::string get_name() {
+            return "Opt";
         }
     };
 
@@ -650,7 +662,7 @@ namespace lsf {
         }
 
         static const std::string get_name() {
-            return Coder<Symbol, Frequency>::get_name();
+            return Coder<Symbol, Frequency>::get_name() + "_" + FilterLengthStrategy::get_name();
         }
     };
 

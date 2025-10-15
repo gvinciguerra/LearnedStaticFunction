@@ -441,7 +441,7 @@ void gaussheatmap(std::vector<std::string> benchOutput) {
                 lsf::GaussDataset dataset(classes, sigma, 1e8);
                 std::vector benchOutputCopy = benchOutput;
                 benchOutputCopy.push_back("sigma="+std::to_string(sigma));
-                dispatchModel<lsf::GaussDataset>(dataset, "gauss", benchOutputCopy, false);
+                dispatchModel<lsf::GaussDataset>(dataset, "gauss", benchOutputCopy, true);
             }
             sigma *= 1.005;
         }
