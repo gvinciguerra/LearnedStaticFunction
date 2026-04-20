@@ -142,12 +142,20 @@ void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput)
     benchOutput.emplace_back("storage_name=BuRR");
     rocksdb::StopWatchNano timer(true);
 
+    XXH3_state_t *state;
+    auto hash = [&](uint64_t key, std::span<const float> features) {
+        XXH3_64bits_reset(state);
+        XXH3_64bits_update(state, &key, sizeof(size_t));
+        XXH3_64bits_update(state, features.data(), features.size_bytes());
+        return XXH3_64bits_digest(state);
+    };
+
     using Config = ribbon::FastRetrievalConfig<r, uint64_t>;
     using RibbonT = ribbon::ribbon_filter<2, Config>;
     RibbonT retrievalDs(dataset.size(), 0.965, 42);
     std::vector<std::pair<uint64_t, uint8_t>> data;
     for (int i = 0; i < dataset.size(); ++i) {
-        data.emplace_back(i, dataset.get_label(i));
+        data.emplace_back(hash(i, dataset.get_example(i)), dataset.get_label(i));
     }
     retrievalDs.AddRange(data.begin(), data.end());
     retrievalDs.BackSubst();
@@ -174,7 +182,7 @@ void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput)
     auto start = std::chrono::high_resolution_clock::now();
     for (auto repeat = 0; repeat < REPEATS; ++repeat) {
         for (auto i: queries) {
-            uint64_t res = retrievalDs.QueryRetrieval(i);
+            uint64_t res = retrievalDs.QueryRetrieval(hash(i, dataset.get_example(i)));
             sum += res;
         }
     }
@@ -186,7 +194,7 @@ void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput)
     bool ok = true;
     for (size_t i = 0; i < dataset.size(); ++i) {
         auto label = dataset.get_label(i);
-        uint64_t res = retrievalDs.QueryRetrieval(i);
+        uint64_t res = retrievalDs.QueryRetrieval(hash(i, dataset.get_example(i)));
         bool found = res == label;
         assert(found);
         ok &= found;
