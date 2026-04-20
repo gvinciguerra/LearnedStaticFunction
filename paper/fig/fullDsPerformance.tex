@@ -10,7 +10,7 @@
 	\begin{tabular}{ll rrr}
 		\toprule
         \multirow{2}{*}{Dataset ($H_0$)} & \multirow{2}{*}{Competitor} & Constr. & Space    & Query \\
-                                         &                             & \textmu{}s/key  & bits/key & \changed{\textmu{}}s/key  \\
+                                         &                             & \textmu{}s/key  & bits/key & \textmu{}s/key  \\
 
 		
 		%% TABULAR REFORMAT(col 3=(precision=4) col 2,4=(precision=3))
@@ -34,17 +34,17 @@
 		%% WHERE NOT outer.dataset_name LIKE "gaussian%" AND (comp != "ours" OR ds_and_model == (SELECT MIN(inner.ds_and_model) FROM bench AS inner WHERE outer.dataset_name==inner.dataset_name AND inner.comp == "ours") OR query_nanos == (SELECT MIN(inner.query_nanos) FROM bench AS inner WHERE outer.dataset_name==inner.dataset_name AND inner.comp == "ours"))
 		%% ORDER BY outer.dataset_name, comp DESC, ds_and_model
   \midrule\multirow{5}{*}{covertype (1.74)} & \textbf{Ours} (L2 U50) & 241.980 & 0.6360 & 2.212 \\
-                                            &     \changed{\textbf{Ours} (LR)} &  \changed{58.857} & \changed{1.0050} & \changed{1.023} \\
+                                            &    \textbf{Ours} (LR)} &  58.857 & 1.0050 & 1.023 \\
                                             &    \textbf{Ours} (CSF) &   0.658 & 1.8020 & 0.125 \\
                                             &                    GOV &   1.613 & 1.9404 & 0.342 \\
                                             &                   BuRR &   0.137 & 3.0471 & 0.021 \\
        \midrule\multirow{5}{*}{nids (2.38)} & \textbf{Ours} (L2 U50) &  67.449 & 1.1573 & 2.290 \\
-                                            &     \changed{\textbf{Ours} (LR)} &  \changed{45.085} & \changed{1.3564} & \changed{1.084} \\
+                                            &     \textbf{Ours} (LR) &  45.085 & 1.3564 & 1.084 \\
                                             &    \textbf{Ours} (CSF) &   0.795 & 2.4451 & 0.149 \\
                                             &                    GOV &   1.801 & 2.5643 & 0.244 \\
                                             &                   BuRR &   0.138 & 4.0541 & 0.029 \\
       \midrule\multirow{5}{*}{songs (6.25)} & \textbf{Ours} (L2 U50) &  71.538 & 4.1005 & 4.569 \\
-                                            &     \changed{\textbf{Ours} (LR)} &  \changed{42.595} & \changed{4.5231} & \changed{3.522} \\
+                                            &     \textbf{Ours} (LR) &  42.595 & 4.5231 & 3.522 \\
                                             &    \textbf{Ours} (CSF) &   1.751 & 6.3102 & 0.156 \\
                                             &                    GOV &  13.683 & 6.5181 & 0.269 \\
                                             &                   BuRR &   0.136 & 7.0823 & 0.040 \\
