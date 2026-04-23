@@ -135,11 +135,18 @@ def prepare_dataset(dataset_name, X, y, classes):
         Xt.tofile(f)
 
     # Write data for sux4j
+    def encode_int(x, base=242, offset=14):
+        out = [0] * 4
+        for i in range(3, -1, -1):
+            x, rem = divmod(x, base)
+            out[i] = rem + offset
+        return bytes(out)
+
     np.array(y, dtype=np.int64).byteswap().tofile(f"processed_data/data_sux4j/{dataset_name}_y.sux4j")
     with open(f"processed_data/data_sux4j/{dataset_name}_X.sux4j", "wb") as f:
         for i, row in enumerate(Xt):
-            byte_data = row.tobytes().replace(b"\0", b" ").replace(b"\n", b" ").replace(b"\r", b"")
-            byte_data += base64.b85encode(i.to_bytes(4, "big"))
+            byte_data = row.tobytes().replace(b"\0", b" ").replace(b"\n", b" ").replace(b"\r", b" ")
+            byte_data += encode_int(i)
             f.write(byte_data)
             f.write(b"\n")
 
