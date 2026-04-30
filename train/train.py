@@ -118,10 +118,10 @@ def load_dataset(dataset_name):
     return X, y, classes
 
 # %%
+
 def prepare_dataset(dataset_name, X, y, classes):
     from sklearn.model_selection import train_test_split
     import struct
-    import base64
     sc = sklearn.preprocessing.StandardScaler()
     Xt = sc.fit_transform(X).astype("float32")
     X_train, X_test, y_train, y_test = train_test_split(Xt, y, test_size=0.2, random_state=42, stratify=y)
@@ -134,14 +134,9 @@ def prepare_dataset(dataset_name, X, y, classes):
         f.write(struct.pack("<Q", Xt.shape[1]))
         Xt.tofile(f)
 
-    # Write data for sux4j
+    # Write values for GOV: keys are 0..n-1 as 4-byte native-order integers,
+    # generated programmatically by BuildCSF.java (no key file needed).
     np.array(y, dtype=np.int64).byteswap().tofile(f"processed_data/data_sux4j/{dataset_name}_y.sux4j")
-    with open(f"processed_data/data_sux4j/{dataset_name}_X.sux4j", "wb") as f:
-        for i, row in enumerate(Xt):
-            byte_data = row.tobytes().replace(b"\0", b" ").replace(b"\n", b" ").replace(b"\r", b"")
-            byte_data += base64.b85encode(i.to_bytes(4, "big"))
-            f.write(byte_data)
-            f.write(b"\n")
 
     return X_train, X_test, y_train, y_test
 

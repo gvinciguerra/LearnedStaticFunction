@@ -47,9 +47,8 @@ WORKDIR /lsf/csf/Sux4J
 RUN git reset --hard abce0bf
 
 # Compile Java code
-RUN sed -i -e 's/BinIO.storeObject(new GV3CompressedFunction<>(keys, TransformationStrategies.rawByteArray(), values, false, tempDir, null, codec, peeled), functionName);/new GV3CompressedFunction<>(keys, TransformationStrategies.rawByteArray(), values, false, tempDir, null, codec, peeled).dump(functionName);/g' src/it/unimi/dsi/sux4j/mph/GV3CompressedFunction.java
-RUN sed -i -e 's/BinIO.storeObject(new GV4CompressedFunction<>(keys, TransformationStrategies.rawByteArray(), values, false, tempDir, null, codec), functionName);/new GV4CompressedFunction<>(keys, TransformationStrategies.rawByteArray(), values, false, tempDir, null, codec).dump(functionName);/g' src/it/unimi/dsi/sux4j/mph/GV4CompressedFunction.java
 RUN ant ivy-setupjars jar
+RUN javac -cp "sux4j-5.4.1.jar:jars/runtime/*" /lsf/csf/BuildCSF.java -d .
 
 # Compile C/C++ code
 RUN mv /lsf/csf/benchmark.cpp .
@@ -80,10 +79,10 @@ set -e\n\
 cd /lsf/train && bash run_train.sh\n\
 cd /lsf/csf && bash run_csf.sh\n\
 cd /lsf\n\
-./build/plot_model_calibration -r /lrdata/ | tee /out/calibration.txt\n\
-./build/filter_tuner | tee /out/filter.txt\n\
-./build/ribbon_learned_bench -r /lrdata/ -e float16 | tee /out/bench.txt\n\
-./build/ribbon_learned_bench -r /lrdata/ -d heatmap -s filter_fano50 -c LSF | tee /out/heatmap.txt\n\
+taskset -c 0 ./build/plot_model_calibration -r /lrdata/ | tee /out/calibration.txt\n\
+taskset -c 0 ./build/filter_tuner | tee /out/filter.txt\n\
+taskset -c 0 ./build/ribbon_learned_bench -r /lrdata/ -e float16 | tee /out/bench.txt\n\
+taskset -c 0 ./build/ribbon_learned_bench -r /lrdata/ -d heatmap -s filter_fano50 -c LSF | tee /out/heatmap.txt\n\
 cd /paper/fig/data\n\
 cp -a /out/. .\n\
 cat bench4.txt >> bench.txt\n\

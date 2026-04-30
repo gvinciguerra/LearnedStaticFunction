@@ -10,8 +10,8 @@ for s in "${structures[@]}"; do
     rm -f /out/bench${s}.txt
     for d in "${datasets[@]}"; do
         echo "Building $d $s"
-        java -cp sux4j-5.4.1.jar:jars/runtime/* it.unimi.dsi.sux4j.mph.GV${s}CompressedFunction -b --values /data_sux4j/${d}_y.sux4j ${d}.csf${s} /data_sux4j/${d}_X.sux4j | tee ${d}.csf${s}-construct.txt
-        ./csf${s} /data_sux4j/${d} ${d}.csf${s} | tee ${d}.csf${s}-query.txt
+        java -cp ".:sux4j-5.4.1.jar:jars/runtime/*" BuildCSF ${s} /data_sux4j/${d}_y.sux4j ${d}.csf${s} | tee ${d}.csf${s}-construct.txt
+        taskset -c 0 ./csf${s} /data_sux4j/${d} ${d}.csf${s} | tee ${d}.csf${s}-query.txt
 
         input=$(grep "Elapsed.*buckets" ${d}.csf${s}-construct.txt)
         buckets=$(echo "$input" | grep -oP '\[\K[0-9,]+(?= buckets)' | tr -d ',')

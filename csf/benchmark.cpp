@@ -24,19 +24,6 @@ extern "C" {
 #include <unistd.h>
 #include <random>
 
-std::vector<std::string> read_file(const std::string& filename) {
-    std::ifstream file(filename);
-    std::vector<std::string> lines;
-    std::string line;
-    if (file.is_open()) {
-        while (std::getline(file, line))
-            lines.push_back(line);
-    } else {
-        std::cerr << "Failed to open file: " << filename << std::endl;
-        exit(1);
-    }
-    return lines;
-}
 
 std::vector<int64_t> read_int64_binary_big_endian(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -67,12 +54,8 @@ int main(int argc, char* argv[]) {
 
     std::string dataset_path = argv[1];
     std::string csf_path = argv[2];
-    auto inputs = read_file(dataset_path + "_X.sux4j");
     auto outputs = read_int64_binary_big_endian(dataset_path + "_y.sux4j");
-    if (inputs.size() != outputs.size()) {
-        std::cerr << "Input and output sizes do not match" << std::endl;
-        exit(1);
-    }
+    size_t n = outputs.size();
 
     int h = open(csf_path.c_str(), O_RDONLY);
     if (h < 0) {
@@ -82,19 +65,19 @@ int main(int argc, char* argv[]) {
     csf *csf = load_csf(h);
 	close(h);
 
-    for (int i = 0; i < inputs.size(); i++) {
-        if (CSF_GET(csf, inputs[i].data(), inputs[i].size()) != outputs[i]) {
-            std::cerr << "Mismatch at index: " << i << std::endl;
-            std::cerr << "Input: " << inputs[i] << std::endl;
-            std::cerr << "Expected: " << outputs[i] << std::endl;
-            std::cerr << "Got: " << CSF_GET(csf, inputs[i].data(), inputs[i].size()) << std::endl;
+    for (size_t idx = 0; idx < n; idx++) {
+        uint32_t key = (uint32_t)idx;
+        if (CSF_GET(csf, (char*)&key, sizeof(key)) != outputs[idx]) {
+            std::cerr << "Mismatch at index: " << idx << std::endl;
+            std::cerr << "Expected: " << outputs[idx] << std::endl;
+            std::cerr << "Got: " << CSF_GET(csf, (char*)&key, sizeof(key)) << std::endl;
             exit(1);
         }
     }
 
     std::vector<uint32_t> queries(QUERIES);
     std::mt19937 gen(42);
-    std::uniform_int_distribution<uint32_t> dist(0, inputs.size() - 1);
+    std::uniform_int_distribution<uint32_t> dist(0, n - 1);
     for (auto &query : queries) {
         query = dist(gen);
     }
@@ -102,8 +85,8 @@ int main(int argc, char* argv[]) {
     uint64_t signature[4];
     auto start_hash = std::chrono::high_resolution_clock::now();
     for (auto repeat = 0; repeat < REPEATS; ++repeat) {
-        for (auto i: queries) {
-            spooky_short(inputs[i].data(), inputs[i].size(), csf->global_seed, signature);
+        for (auto q: queries) {
+            spooky_short(&q, sizeof(q), csf->global_seed, signature);
         }
     }
     auto end_hash = std::chrono::high_resolution_clock::now();
@@ -112,8 +95,8 @@ int main(int argc, char* argv[]) {
     size_t sum = 0;
     auto start = std::chrono::high_resolution_clock::now();
     for (auto repeat = 0; repeat < REPEATS; ++repeat) {
-        for (auto i: queries) {
-            sum += CSF_GET(csf, inputs[i].data(), inputs[i].size());
+        for (auto q: queries) {
+            sum += CSF_GET(csf, (char*)&q, sizeof(q));
         }
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -123,7 +106,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Results sum: " << sum << std::endl;
     std::cout << "Time: " << duration / (queries.size() * REPEATS)  << " ns/query" << std::endl;
     std::cout << "Hash time: " << duration_hash / (queries.size() * REPEATS)  << " ns/query" << std::endl;
-    std::cout << "Size: " << inputs.size() << std::endl;
+    std::cout << "Size: " << n << std::endl;
 
     return 0;
 }
