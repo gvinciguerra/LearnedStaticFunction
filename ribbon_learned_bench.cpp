@@ -73,7 +73,7 @@ benchmark(const DataSet &dataset, Model &model, std::vector<std::string> benchOu
             "storage_factor=" + std::to_string(double((8.0 * lr.storage_bytes()) / lr.get_statistic_bits_input())));
 
     if constexpr (doQueries) {
-        volatile uint64_t sum = 0;
+        uint64_t sum = 0;
 
         std::vector<uint32_t> queries(QUERIES);
         std::mt19937 gen(42);
@@ -108,6 +108,7 @@ benchmark(const DataSet &dataset, Model &model, std::vector<std::string> benchOu
             }
         }
         nanos = timer.ElapsedNanos(true);
+        std::cout<<"sum: "<<sum<<std::endl;
         nanosKey = nanos / static_cast<double>(TOT_QUERIES);
         std::cout << "Total query time: " << nanos << " ns (" << nanosKey << " ns/query)\n";
         benchOutput.push_back("query_nanos=" + std::to_string(nanosKey));
@@ -160,7 +161,7 @@ void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput)
     benchOutput.push_back("storage_bits=" + std::to_string(8.0 * retrievalDs.Size() / double(dataset.size())));
     benchOutput.push_back(
             "storage_factor=" + std::to_string(double((8.0 * retrievalDs.Size()) / (r * dataset.size()))));
-    volatile uint64_t sum = 0;
+    uint64_t sum = 0;
 
     std::vector<uint32_t> queries(QUERIES);
     std::mt19937 gen(42);
@@ -171,7 +172,6 @@ void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput)
 
     timer.Start();
 
-    auto start = std::chrono::high_resolution_clock::now();
     for (auto repeat = 0; repeat < REPEATS; ++repeat) {
         for (auto i: queries) {
             uint64_t res = retrievalDs.QueryRetrieval(i);
@@ -179,6 +179,7 @@ void benchmarkBuRR(const Dataset &dataset, std::vector<std::string> benchOutput)
         }
     }
     nanos = timer.ElapsedNanos(true);
+    std::cout<<"sum: "<<sum<<std::endl;
     auto nanosKey = nanos / static_cast<double>(TOT_QUERIES);
     std::cout << "Total query time: " << nanos << " ns (" << nanosKey << " ns/query)\n";
     benchOutput.push_back("query_nanos=" + std::to_string(nanosKey));
